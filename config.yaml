@@ -1,0 +1,120 @@
+# AEO Visibility Platform Configuration
+# This file defines settings for the answer engine evaluation runner.
+# API keys should be set via environment variables (.env) for security.
+
+# Provider-specific configurations (Claude, OpenAI, Gemini, Grok, Perplexity)
+providers:
+  claude:
+    # api_key: will be read from ANTHROPIC_API_KEY env var
+    model_name: "claude-opus-5"
+    rate_limit_tpm: 150000        # tokens per minute
+    rate_limit_rpm: 100           # requests per minute
+    timeout_seconds: 60
+    cost_per_1k_input_tokens: 0.003
+    cost_per_1k_output_tokens: 0.015
+
+  openai:
+    # api_key: will be read from OPENAI_API_KEY env var
+    model_name: "gpt-4o"
+    rate_limit_tpm: 200000
+    rate_limit_rpm: 500
+    timeout_seconds: 60
+    cost_per_1k_input_tokens: 0.015
+    cost_per_1k_output_tokens: 0.060
+
+  gemini:
+    # api_key: will be read from GOOGLE_API_KEY env var
+    model_name: "gemini-2.0-flash"
+    rate_limit_tpm: 1000000
+    rate_limit_rpm: 1000
+    timeout_seconds: 60
+    cost_per_1k_input_tokens: 0.075
+    cost_per_1k_output_tokens: 0.30
+
+  grok:
+    # api_key: will be read from GROK_API_KEY env var
+    model_name: "grok-2"
+    rate_limit_tpm: 200000
+    rate_limit_rpm: 100
+    timeout_seconds: 60
+    cost_per_1k_input_tokens: 0.002
+    cost_per_1k_output_tokens: 0.010
+
+  perplexity:
+    # api_key: will be read from PERPLEXITY_API_KEY env var
+    model_name: "sonar-pro"
+    rate_limit_tpm: 150000
+    rate_limit_rpm: 100
+    timeout_seconds: 60
+    cost_per_1k_input_tokens: 0.003
+    cost_per_1k_output_tokens: 0.015
+
+# Retry policy for transient failures
+retry_policy:
+  max_retries: 3
+  initial_delay_ms: 100
+  backoff_factor: 2.0
+  max_delay_ms: 30000
+
+# General system settings
+general:
+  # Cost limit per evaluation run (in dollars)
+  # Prevents runaway API spending ($26-39 recommended for full run)
+  cost_limit_per_run: 35.0
+
+  # Path to buyer questions JSON file
+  question_json_path: "question.json"
+
+  # SQLite database for storing results
+  output_db_path: "data/eval_runs.db"
+
+  # Logging level (DEBUG, INFO, WARNING, ERROR)
+  log_level: "INFO"
+
+# Evaluation parameters
+evaluation:
+  # Competitor products to track in responses
+  competitors:
+    - Fivetran
+    - Oracle GoldenGate
+    - Qlik Replicate
+    - Confluent
+    - AWS DMS
+    - Estuary
+
+  # Important Striim pages for accessibility checks (Module 6)
+  important_striim_pages:
+    - https://www.striim.com/product/
+    - https://www.striim.com/solutions/
+    - https://www.striim.com/docs/
+    - https://www.striim.com/customers/
+
+  # AI crawlers to monitor in request logs (Module 7)
+  crawlers:
+    - OAI-SearchBot
+    - PerplexityBot
+    - Claude-SearchBot
+    - ClaudeBot
+    - Googlebot
+    - Bingbot
+    - GPTBot
+    - ChatGPT-User
+    - Perplexity-User
+
+  # Optional: Filter questions by topic
+  # enabled_topics:
+  #   - "Oracle CDC"
+  #   - "Kafka Integration"
+
+  # Optional: Filter questions by persona
+  # enabled_personas:
+  #   - "Data Architect"
+  #   - "Data Engineer"
+
+# Scheduling configuration (for Module 2 scheduled runs)
+scheduling:
+  # Timezone for cron scheduling
+  timezone: "US/Eastern"
+
+  # Default cron expression for monthly runs (9am Monday)
+  default_schedule: "0 9 * * MON"

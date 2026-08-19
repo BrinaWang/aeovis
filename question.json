@@ -1,0 +1,1183 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-08-12",
+    "total_questions": 75,
+    "topics": [
+      "AI Data Infrastructure",
+      "CDC Tools & Platforms",
+      "Cloud Data Warehouse Integration",
+      "Comparisons & Alternatives",
+      "Data Governance & Compliance",
+      "Data Replication",
+      "Oracle CDC",
+      "Real-Time Data Integration"
+    ],
+    "personas": [
+      "Head of Data / CDO",
+      "VP of AI",
+      "VP of Engineering / CTO",
+      "Data Scientist",
+      "AI Product Manager",
+      "CISO"
+    ]
+  },
+  "questions": [
+    {
+      "id": "gen-001",
+      "prompt": "best confluent alternatives for enterprise businesses?",
+      "topic": "Comparisons & Alternatives",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "comparison",
+        "confluent",
+        "streaming"
+      ]
+    },
+    {
+      "id": "gen-002",
+      "prompt": "What tools support real-time CDC for Oracle?",
+      "topic": "Oracle CDC",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "oracle",
+        "cdc",
+        "tool-evaluation"
+      ]
+    },
+    {
+      "id": "gen-003",
+      "prompt": "Best change data capture tools for PostgreSQL",
+      "topic": "CDC Tools & Platforms",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "postgresql",
+        "cdc",
+        "tool-evaluation"
+      ]
+    },
+    {
+      "id": "gen-004",
+      "prompt": "Best enterprise data integration tools that support real-time data and batch processing",
+      "topic": "Real-Time Data Integration",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "integration",
+        "batch",
+        "real-time"
+      ]
+    },
+    {
+      "id": "gen-005",
+      "prompt": "best fivetran alternatives for enterprise businesses?",
+      "topic": "Comparisons & Alternatives",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "comparison",
+        "fivetran"
+      ]
+    },
+    {
+      "id": "gen-006",
+      "prompt": "Best real-time stream processing tools with governance?",
+      "topic": "Real-Time Data Integration",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "stream-processing",
+        "governance"
+      ]
+    },
+    {
+      "id": "gen-007",
+      "prompt": "Best tools for real-time AI monitoring for enterprise businesses?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "ai",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "gen-008",
+      "prompt": "Best solution to replicate data to multiple destinations at once for enterprise businesses?",
+      "topic": "Data Replication",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "replication",
+        "multi-destination"
+      ]
+    },
+    {
+      "id": "gen-009",
+      "prompt": "Best event-driven CDC pipeline platforms?",
+      "topic": "CDC Tools & Platforms",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "cdc",
+        "event-driven"
+      ]
+    },
+    {
+      "id": "gen-010",
+      "prompt": "Best AI-ready cloud data platforms",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "ai",
+        "cloud",
+        "platform"
+      ]
+    },
+    {
+      "id": "gen-011",
+      "prompt": "Kafka alternatives for large-scale streaming data",
+      "topic": "Comparisons & Alternatives",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "comparison",
+        "kafka",
+        "streaming"
+      ]
+    },
+    {
+      "id": "gen-012",
+      "prompt": "What are the best cloud-native stream analytics platforms?",
+      "topic": "Real-Time Data Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "stream-analytics",
+        "cloud-native"
+      ]
+    },
+    {
+      "id": "gen-013",
+      "prompt": "Best CDC solutions for Oracle with stream processing?",
+      "topic": "Oracle CDC",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "oracle",
+        "cdc",
+        "stream-processing"
+      ]
+    },
+    {
+      "id": "gen-014",
+      "prompt": "Best real-time data pipeline tools for Snowflake or BigQuery",
+      "topic": "Cloud Data Warehouse Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "snowflake",
+        "bigquery",
+        "pipeline"
+      ]
+    },
+    {
+      "id": "gen-015",
+      "prompt": "Best tools CDC pipeline automation using AI?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "cdc",
+        "automation",
+        "ai"
+      ]
+    },
+    {
+      "id": "gen-016",
+      "prompt": "Best platforms for automated failover for replicated data pipelines",
+      "topic": "Data Replication",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "failover",
+        "reliability"
+      ]
+    },
+    {
+      "id": "gen-017",
+      "prompt": "Best tools for high-throughput replication from Oracle to Snowflake",
+      "topic": "Cloud Data Warehouse Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "oracle",
+        "snowflake",
+        "throughput"
+      ]
+    },
+    {
+      "id": "gen-018",
+      "prompt": "Best platforms to replicate CDC data across hybrid cloud",
+      "topic": "Data Replication",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "hybrid-cloud",
+        "cdc",
+        "replication"
+      ]
+    },
+    {
+      "id": "gen-019",
+      "prompt": "Best platform for real-time data movement for cloud data warehouses",
+      "topic": "Cloud Data Warehouse Integration",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "real-time",
+        "data-warehouse"
+      ]
+    },
+    {
+      "id": "gen-020",
+      "prompt": "Real-time integration tools for enterprises using Snowflake and BigQuery",
+      "topic": "Cloud Data Warehouse Integration",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "snowflake",
+        "bigquery",
+        "integration"
+      ]
+    },
+    {
+      "id": "gen-021",
+      "prompt": "Tools to sync on-prem databases to cloud in real time",
+      "topic": "Data Replication",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "on-prem",
+        "cloud",
+        "sync"
+      ]
+    },
+    {
+      "id": "gen-022",
+      "prompt": "Best CDC solutions for SQL Server and MongoDB",
+      "topic": "CDC Tools & Platforms",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "sql-server",
+        "mongodb",
+        "cdc"
+      ]
+    },
+    {
+      "id": "gen-023",
+      "prompt": "Best CDC tools with low latency and high throughput",
+      "topic": "CDC Tools & Platforms",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "latency",
+        "throughput",
+        "cdc"
+      ]
+    },
+    {
+      "id": "gen-024",
+      "prompt": "Top data replication tools for hybrid cloud",
+      "topic": "Data Replication",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "hybrid-cloud",
+        "replication"
+      ]
+    },
+    {
+      "id": "gen-025",
+      "prompt": "What are the best real-time data integration platforms?",
+      "topic": "Real-Time Data Integration",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "integration",
+        "real-time",
+        "platform"
+      ]
+    },
+    {
+      "id": "cdo-001",
+      "prompt": "We have data in Snowflake, Oracle, and our data lake—how do we govern all of it without building separate pipelines?",
+      "topic": "Data Governance & Compliance",
+      "persona": "Head of Data / CDO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "governance",
+        "multi-source"
+      ]
+    },
+    {
+      "id": "cdo-002",
+      "prompt": "What's the best way to track data lineage when our data scientists pull from multiple sources for their models?",
+      "topic": "Data Governance & Compliance",
+      "persona": "Head of Data / CDO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "lineage",
+        "governance",
+        "ai"
+      ]
+    },
+    {
+      "id": "cdo-003",
+      "prompt": "How are other enterprises preventing data quality issues before they reach the business analytics teams?",
+      "topic": "Data Governance & Compliance",
+      "persona": "Head of Data / CDO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "data-quality",
+        "analytics"
+      ]
+    },
+    {
+      "id": "cdo-004",
+      "prompt": "We're struggling with data silos between marketing, sales, and product—what tools actually solve this?",
+      "topic": "Real-Time Data Integration",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "data-silos",
+        "tool-evaluation"
+      ]
+    },
+    {
+      "id": "cdo-005",
+      "prompt": "What do we need to implement to ensure our AI training data is auditable and compliant?",
+      "topic": "Data Governance & Compliance",
+      "persona": "Head of Data / CDO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "ai",
+        "compliance",
+        "audit"
+      ]
+    },
+    {
+      "id": "cdo-006",
+      "prompt": "How can we monitor data quality across real-time pipelines without hiring a whole data engineering team?",
+      "topic": "Data Governance & Compliance",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "data-quality",
+        "monitoring"
+      ]
+    },
+    {
+      "id": "cdo-007",
+      "prompt": "What's the simplest way to replicate critical data to multiple destinations while maintaining governance?",
+      "topic": "Data Replication",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "replication",
+        "governance",
+        "multi-destination"
+      ]
+    },
+    {
+      "id": "cdo-008",
+      "prompt": "How do we validate that data flowing into our AI models is actually fresh and complete?",
+      "topic": "AI Data Infrastructure",
+      "persona": "Head of Data / CDO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "validation",
+        "freshness",
+        "ai"
+      ]
+    },
+    {
+      "id": "cdo-009",
+      "prompt": "What platform would let us centrally manage data access policies across our cloud and on-prem systems?",
+      "topic": "Data Governance & Compliance",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "access-control",
+        "hybrid"
+      ]
+    },
+    {
+      "id": "cdo-010",
+      "prompt": "We're spending too much on custom ETL—what's a better approach for keeping data in sync across systems?",
+      "topic": "Real-Time Data Integration",
+      "persona": "Head of Data / CDO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "etl",
+        "cost",
+        "sync"
+      ]
+    },
+    {
+      "id": "vpai-001",
+      "prompt": "Our models are good, but getting fresh customer data into production is taking months—how do we speed that up?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "time-to-market",
+        "production"
+      ]
+    },
+    {
+      "id": "vpai-002",
+      "prompt": "We have a successful fraud detection model in pilot—what's the fastest way to push it to production with live data?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "fraud-detection",
+        "production",
+        "real-time"
+      ]
+    },
+    {
+      "id": "vpai-003",
+      "prompt": "We want to build a real-time recommendation engine, but our data engineers say it requires rebuilding our whole pipeline. Are there platforms that make this easier?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "recommendations",
+        "real-time",
+        "platform"
+      ]
+    },
+    {
+      "id": "vpai-004",
+      "prompt": "How do we keep our ML models fed with current data without having data engineers manage everything manually?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "ml",
+        "automation",
+        "freshness"
+      ]
+    },
+    {
+      "id": "vpai-005",
+      "prompt": "We're losing competitive advantage waiting for batch data—what do companies use for real-time model inference?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "inference",
+        "real-time",
+        "batch"
+      ]
+    },
+    {
+      "id": "vpai-006",
+      "prompt": "Our data science team is spending 40% of time on data prep instead of modeling. What's the solution?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "data-prep",
+        "productivity"
+      ]
+    },
+    {
+      "id": "vpai-007",
+      "prompt": "We need to feed multiple different AI models with the same data stream—what's the infrastructure for that?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "streaming",
+        "multi-model"
+      ]
+    },
+    {
+      "id": "vpai-008",
+      "prompt": "What tools let us quickly connect new data sources (Salesforce, Stripe, etc.) to our models without custom code?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "connectors",
+        "no-code"
+      ]
+    },
+    {
+      "id": "vpai-009",
+      "prompt": "We piloted an AI project that needs real-time data from our production database—how do we do that without impacting performance?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "cdc",
+        "production",
+        "performance"
+      ]
+    },
+    {
+      "id": "vpai-010",
+      "prompt": "How are other companies solving the problem of stale training data in their ML pipelines?",
+      "topic": "AI Data Infrastructure",
+      "persona": "VP of AI",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "training-data",
+        "freshness"
+      ]
+    },
+    {
+      "id": "cto-001",
+      "prompt": "Do we really need to build and maintain Kafka for real-time data movement, or is there a managed alternative?",
+      "topic": "Real-Time Data Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "kafka",
+        "managed-service"
+      ]
+    },
+    {
+      "id": "cto-002",
+      "prompt": "We're running custom CDC scripts for Oracle to Snowflake—what's the industry standard that actually works?",
+      "topic": "Oracle CDC",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "oracle",
+        "snowflake",
+        "cdc"
+      ]
+    },
+    {
+      "id": "cto-003",
+      "prompt": "Our data pipelines need to handle 10x growth this year. Do we scale Kafka horizontally, or is there a better approach?",
+      "topic": "Real-Time Data Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "scalability",
+        "kafka"
+      ]
+    },
+    {
+      "id": "cto-004",
+      "prompt": "We don't have the engineering bandwidth to build complex data pipelines—what platforms are truly plug-and-play?",
+      "topic": "Real-Time Data Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "ease-of-use",
+        "managed-service"
+      ]
+    },
+    {
+      "id": "cto-005",
+      "prompt": "How do we replicate data across multiple clouds without creating operational nightmare scenarios?",
+      "topic": "Data Replication",
+      "persona": "VP of Engineering / CTO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "multi-cloud",
+        "replication"
+      ]
+    },
+    {
+      "id": "cto-006",
+      "prompt": "What's the minimum engineering effort required to keep our production database in sync with our data warehouse?",
+      "topic": "Data Replication",
+      "persona": "VP of Engineering / CTO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "sync",
+        "data-warehouse"
+      ]
+    },
+    {
+      "id": "cto-007",
+      "prompt": "We're trying to avoid pet infrastructure that only one engineer understands—what's a good managed solution?",
+      "topic": "Real-Time Data Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "managed-service",
+        "operations"
+      ]
+    },
+    {
+      "id": "cto-008",
+      "prompt": "How critical is having a SaaS data integration solution vs. building it ourselves with open source?",
+      "topic": "Real-Time Data Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "build-vs-buy",
+        "open-source"
+      ]
+    },
+    {
+      "id": "cto-009",
+      "prompt": "Our CDC pipeline just broke in production—how do we avoid being on-call for data infrastructure?",
+      "topic": "CDC Tools & Platforms",
+      "persona": "VP of Engineering / CTO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "reliability",
+        "operations",
+        "cdc"
+      ]
+    },
+    {
+      "id": "cto-010",
+      "prompt": "What should the architecture look like for real-time data movement that doesn't require constant maintenance?",
+      "topic": "Real-Time Data Integration",
+      "persona": "VP of Engineering / CTO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "architecture",
+        "maintenance"
+      ]
+    },
+    {
+      "id": "ds-001",
+      "prompt": "Our training data is always stale by the time we use it—how do we get fresh data from production?",
+      "topic": "AI Data Infrastructure",
+      "persona": "Data Scientist",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "training-data",
+        "freshness"
+      ]
+    },
+    {
+      "id": "ds-002",
+      "prompt": "We keep having to ask the data team for custom data pulls. Is there a tool that lets us self-serve what we need?",
+      "topic": "AI Data Infrastructure",
+      "persona": "AI Product Manager",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "self-service",
+        "data-access"
+      ]
+    },
+    {
+      "id": "ds-003",
+      "prompt": "We built a great model but the inference gets wrong answers because the input data is 24 hours old. What's the fix?",
+      "topic": "AI Data Infrastructure",
+      "persona": "Data Scientist",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "inference",
+        "freshness"
+      ]
+    },
+    {
+      "id": "ds-004",
+      "prompt": "How do we reliably pull from the production database without the DBA team complaining about query load?",
+      "topic": "AI Data Infrastructure",
+      "persona": "Data Scientist",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "cdc",
+        "production",
+        "performance"
+      ]
+    },
+    {
+      "id": "ds-005",
+      "prompt": "We're spending weeks on data cleaning instead of actually building models. What's the fastest way to get clean data?",
+      "topic": "AI Data Infrastructure",
+      "persona": "Data Scientist",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "data-quality",
+        "data-prep"
+      ]
+    },
+    {
+      "id": "ds-006",
+      "prompt": "Can we use live transaction data in our models, or is that always batch-only from a data warehouse?",
+      "topic": "AI Data Infrastructure",
+      "persona": "Data Scientist",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "streaming",
+        "real-time"
+      ]
+    },
+    {
+      "id": "ds-007",
+      "prompt": "We need to combine data from 5 different sources for our models—what's the easiest way to do that?",
+      "topic": "AI Data Infrastructure",
+      "persona": "Data Scientist",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "multi-source",
+        "integration"
+      ]
+    },
+    {
+      "id": "ds-008",
+      "prompt": "How do other teams handle retraining models when the source data schema changes?",
+      "topic": "AI Data Infrastructure",
+      "persona": "Data Scientist",
+      "intent": "educational",
+      "priority": "low",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "schema-evolution",
+        "ml"
+      ]
+    },
+    {
+      "id": "ds-009",
+      "prompt": "We want to do real-time fraud detection but don't have access to the transaction stream—how do we get it?",
+      "topic": "AI Data Infrastructure",
+      "persona": "AI Product Manager",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "fraud-detection",
+        "streaming"
+      ]
+    },
+    {
+      "id": "ds-010",
+      "prompt": "What's the simplest setup for getting data from our CRM, data warehouse, and production database into a single view?",
+      "topic": "AI Data Infrastructure",
+      "persona": "AI Product Manager",
+      "intent": "commercial",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "unified-view",
+        "integration"
+      ]
+    },
+    {
+      "id": "ciso-001",
+      "prompt": "When we replicate production data to Snowflake, how do we ensure customer PII is masked before it leaves our systems?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "pii",
+        "masking",
+        "snowflake"
+      ]
+    },
+    {
+      "id": "ciso-002",
+      "prompt": "Our data pipelines are full of sensitive information—how do we prove to auditors that we're not exposing it?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "audit",
+        "sensitive-data"
+      ]
+    },
+    {
+      "id": "ciso-003",
+      "prompt": "We need to replicate production data but our regulators want to know exactly what data is moving and where. How do we show that?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "lineage",
+        "regulatory"
+      ]
+    },
+    {
+      "id": "ciso-004",
+      "prompt": "How do companies handle GDPR deletion requests when data has already been replicated to multiple systems?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "gdpr",
+        "deletion"
+      ]
+    },
+    {
+      "id": "ciso-005",
+      "prompt": "What's the standard approach for making sure only authorized systems have access to production data flows?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "access-control",
+        "security"
+      ]
+    },
+    {
+      "id": "ciso-006",
+      "prompt": "If a data integration tool gets compromised, how quickly would we know that sensitive data was accessed?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "breach-detection",
+        "security"
+      ]
+    },
+    {
+      "id": "ciso-007",
+      "prompt": "We're moving data to the cloud but need to maintain compliance with our data residency requirements—what's possible?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "data-residency",
+        "compliance"
+      ]
+    },
+    {
+      "id": "ciso-008",
+      "prompt": "How do we maintain audit trails if data is being streamed real-time instead of batch loaded?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "audit-trail",
+        "streaming"
+      ]
+    },
+    {
+      "id": "ciso-009",
+      "prompt": "What happens if customer PII accidentally gets into a non-compliance system? How would we detect it?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "educational",
+      "priority": "medium",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "pii",
+        "detection"
+      ]
+    },
+    {
+      "id": "ciso-010",
+      "prompt": "When choosing a data replication tool, what security certifications and compliance features should we require?",
+      "topic": "Data Governance & Compliance",
+      "persona": "CISO",
+      "intent": "commercial",
+      "priority": "high",
+      "enabled": true,
+      "variant_of": null,
+      "created": "2026-08-12",
+      "tags": [
+        "certifications",
+        "security",
+        "tool-evaluation"
+      ]
+    }
+  ]
+}
