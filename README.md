@@ -34,8 +34,8 @@ The AEO Visibility Platform answers six key questions:
 - **SQLite** — Persistent storage for runs, results, gaps, and recommendations
 
 **AI & Integration**
-- **Anthropic Claude API** — Primary answer engine
-- **OpenAI GPT** — Secondary engine (scaffolding)
+- **OpenAI GPT** — Answer Engine
+- **Anthropic Claude API** - Answer Engine
 - **HTTPx** — Async HTTP client for crawler simulation and content fetching
 - **Beautiful Soup 4** — HTML parsing and extraction
 - **Trafilatura** — Main content extraction for web pages
@@ -64,9 +64,9 @@ See `pyproject.toml` for the complete dependency list.
 - **Python 3.9 or higher**
 - **API Keys** for at least one provider:
   - `ANTHROPIC_API_KEY` (Anthropic Claude)
-  - `OPENAI_API_KEY` (OpenAI; optional)
-  - `GROK_API_KEY` (xAI Grok; optional)
-  - `PERPLEXITY_API_KEY` (Perplexity; optional)
+  - `OPENAI_API_KEY` (OpenAI)
+  - `GROK_API_KEY` (xAI Grok)
+  - `PERPLEXITY_API_KEY` (Perplexity)
 
 ### 1. Clone and Install
 
