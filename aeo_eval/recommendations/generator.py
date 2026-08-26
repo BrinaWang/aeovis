@@ -78,6 +78,14 @@ class RecommendationGenerator:
         # Evidence summary
         evidence_summary = f"{len(gap.get('evidence_ids', []))} evidence sources"
 
+        # Determine if recommendation should auto-publish
+        # High-confidence + high-priority (>= 8) recommendations are auto-published
+        confidence = gap["confidence"]
+        will_auto_publish = confidence == "high" and priority >= 8
+
+        # Set status based on auto-publish decision
+        status = "pending_publish" if will_auto_publish else "draft"
+
         return {
             "id": str(uuid.uuid4()),
             "gap_id": gap["id"],
@@ -91,8 +99,9 @@ class RecommendationGenerator:
             "measurement_plan": (
                 f"Re-run '{topic}' questions after implementation and compare visibility metrics."
             ),
-            "confidence": gap["confidence"],
-            "status": "draft",  # Start in draft; approval workflow moves to pending
+            "confidence": confidence,
+            "will_auto_publish": will_auto_publish,
+            "status": status,
             "created_timestamp": datetime.now().isoformat(),
         }
 

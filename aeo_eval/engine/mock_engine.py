@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import logging
 import random
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict
 
 from aeo_eval.engine.base import BaseEngine
 from aeo_eval.models.result import RunResult
 from aeo_eval.models.analysis import StructuredCallResult
+from aeo_eval.storage.sqlite_store import SQLiteStore
+from aeo_eval.config import config
+
+logger = logging.getLogger(__name__)
 
 
 class MockEngine(BaseEngine):
@@ -173,7 +178,16 @@ class RandomMockEngine(BaseEngine):
     ]
 
     def run(self, prompt_text: str) -> RunResult:
-        """Run and return a random response from the pool."""
+        """Run and return a random response from the pool.
+
+        Also auto-generates and stores test data:
+        - 20 fake crawler logs for AI bot activity
+        - 15 fake website accessibility checks
+
+        Generated data is stored in the SQLite database via store_crawler_logs()
+        and store_website_checks(). Storage errors are logged as warnings but do
+        not fail the run.
+        """
         run_id = str(uuid.uuid4())
         start_time = datetime.now()
 
@@ -192,6 +206,12 @@ class RandomMockEngine(BaseEngine):
         # Calculate cost
         actual_cost = self.estimate_cost(input_tokens, output_tokens)
 
+        # Generate and store mock test data
+        try:
+            self._generate_and_store_test_data()
+        except Exception as e:
+            logger.warning(f"Failed to generate and store test data: {e}")
+
         return RunResult(
             run_id=run_id,
             run_batch_id="",
@@ -209,6 +229,98 @@ class RandomMockEngine(BaseEngine):
             run_timestamp=start_time,
             run_type="manual",
         )
+
+    def _generate_and_store_test_data(self) -> None:
+        """Generate mock crawler logs and website checks, then store them in the database.
+
+        Handles transformation from generated format to database schema and gracefully
+        logs any storage failures without propagating them.
+        """
+        try:
+            # Initialize store with database path from config
+            db_path = config.general.output_db_path
+            store = SQLiteStore(db_path)
+
+            # Generate crawler logs
+            raw_crawler_logs = self.generate_mock_crawler_logs(count=20)
+            transformed_crawler_logs = self._transform_crawler_logs(raw_crawler_logs)
+            stored_count = store.store_crawler_logs(transformed_crawler_logs)
+            logger.info(f"Stored {stored_count} crawler log records")
+
+            # Generate website checks
+            raw_website_checks = self.generate_mock_website_checks(count=15)
+            transformed_website_checks = self._transform_website_checks(raw_website_checks)
+            stored_count = store.store_website_checks(transformed_website_checks)
+            logger.info(f"Stored {stored_count} website check records")
+
+        except Exception as e:
+            logger.warning(f"Error generating/storing test data: {e}")
+            raise
+
+    def _transform_crawler_logs(self, logs: list[dict]) -> list[dict]:
+        """Transform generated crawler logs to database schema format.
+
+        Maps field names and converts edge_action based on HTTP status code.
+
+        Args:
+            logs: List of generated crawler log records
+
+        Returns:
+            List of transformed records ready for storage
+        """
+        transformed = []
+        for log in logs:
+            # Map status_code to edge_action
+            status_code = log.get("status_code")
+            if status_code == 200:
+                edge_action = "allowed"
+            elif status_code == 429:
+                edge_action = "rate_limited"
+            else:
+                edge_action = "blocked"
+
+            transformed_log = {
+                "id": log["id"],
+                "timestamp": log["timestamp"],
+                "host": log["host"],
+                "path": log["path"],
+                "crawler": log["user_agent"],  # renamed from user_agent
+                "http_status": log["status_code"],  # renamed from status_code
+                "response_time_ms": log["response_time_ms"],
+                "edge_action": edge_action,
+                "log_source": "mock_generator",
+            }
+            transformed.append(transformed_log)
+        return transformed
+
+    def _transform_website_checks(self, checks: list[dict]) -> list[dict]:
+        """Transform generated website checks to database schema format.
+
+        Converts boolean fields to integers and adds any missing fields.
+
+        Args:
+            checks: List of generated website check records
+
+        Returns:
+            List of transformed records ready for storage
+        """
+        transformed = []
+        for check in checks:
+            transformed_check = {
+                "id": check["id"],
+                "striim_url": check["striim_url"],
+                "crawler": check["crawler"],
+                "robots_allowed": 1 if check["robots_allowed"] else 0,
+                "in_sitemap": None,  # Not generated, set to None
+                "http_status": check["http_status"],
+                "response_time_ms": check["response_time_ms"],
+                "noindex": 1 if check["noindex"] else 0,
+                "canonical_url": check["canonical_url"],
+                "result": check["result"],
+                "check_timestamp": check["check_timestamp"],
+            }
+            transformed.append(transformed_check)
+        return transformed
 
     def run_with_structured_output(
         self,
@@ -285,3 +397,165 @@ class RandomMockEngine(BaseEngine):
             output_tokens=output_tokens,
             cost=cost,
         )
+
+    def generate_mock_crawler_logs(self, count: int = 50) -> list[dict]:
+        """Generate mock crawler logs for testing.
+
+        Returns a list of faux request log records with realistic crawler behavior.
+
+        Args:
+            count: Number of log records to generate (default 50)
+
+        Returns:
+            List of dictionaries with fields: id, timestamp, host, path, status_code,
+            user_agent, response_time_ms, normalized_path
+        """
+        crawlers = [
+            "OAI-SearchBot",
+            "PerplexityBot",
+            "Claude-SearchBot",
+            "Googlebot",
+            "GPTBot",
+            "Bingbot",
+        ]
+        paths = [
+            "/product/",
+            "/docs/",
+            "/blog/",
+            "/solutions/",
+            "/case-studies/",
+        ]
+        hosts = ["www.striim.com"] * 7 + ["www.example.com"]  # 87.5% striim, 12.5% example
+
+        # Status code distribution: 200 (60%), 403 (20%), 429 (10%), 500 (10%)
+        def get_status_code():
+            rand = random.random()
+            if rand < 0.60:
+                return 200
+            elif rand < 0.80:
+                return 403
+            elif rand < 0.90:
+                return 429
+            else:
+                return 500
+
+        logs = []
+        now = datetime.now()
+        for i in range(count):
+            # Generate timestamp within last 90 days
+            days_ago = random.randint(0, 89)
+            hours_ago = random.randint(0, 23)
+            minutes_ago = random.randint(0, 59)
+            timestamp = now - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)
+
+            path = random.choice(paths)
+            normalized_path = path.rstrip("/")
+
+            logs.append({
+                "id": f"log-{uuid.uuid4().hex[:12]}",
+                "timestamp": timestamp.isoformat(),
+                "host": random.choice(hosts),
+                "path": path,
+                "status_code": get_status_code(),
+                "user_agent": random.choice(crawlers),
+                "response_time_ms": random.randint(10, 500),
+                "normalized_path": normalized_path,
+            })
+
+        return logs
+
+    def generate_mock_website_checks(self, count: int = 30) -> list[dict]:
+        """Generate mock website check records for testing.
+
+        Returns a list of faux website check records for crawler accessibility.
+
+        Args:
+            count: Number of check records to generate (default 30)
+
+        Returns:
+            List of dictionaries with fields: id, striim_url, crawler, robots_allowed,
+            http_status, response_time_ms, noindex, canonical_url, result, check_timestamp
+        """
+        crawlers = [
+            "OAI-SearchBot",
+            "PerplexityBot",
+            "Claude-SearchBot",
+            "Googlebot",
+            "GPTBot",
+            "Bingbot",
+        ]
+        striim_urls = [
+            "/product/oracle-cdc/",
+            "/docs/oracle-to-snowflake/",
+            "/blog/cdc-guide/",
+            "/docs/snowflake/",
+            "/solutions/data-integration/",
+            "/case-studies/",
+        ]
+
+        # Result distribution: publicly_accessible (60%), blocked_by_robots (15%),
+        # poorly_extractable (15%), http_error_4xx (10%)
+        def get_result():
+            rand = random.random()
+            if rand < 0.60:
+                return "publicly_accessible"
+            elif rand < 0.75:
+                return "blocked_by_robots"
+            elif rand < 0.90:
+                return "poorly_extractable"
+            else:
+                return "http_error_4xx"
+
+        # http_status distribution: 200 (70%), 403 (20%), 404 (10%)
+        def get_http_status():
+            rand = random.random()
+            if rand < 0.70:
+                return 200
+            elif rand < 0.90:
+                return 403
+            else:
+                return 404
+
+        checks = []
+        now = datetime.now()
+        for i in range(count):
+            # Generate timestamp within last 30 days
+            days_ago = random.randint(0, 29)
+            hours_ago = random.randint(0, 23)
+            check_timestamp = now - timedelta(days=days_ago, hours=hours_ago)
+
+            result = get_result()
+
+            # Adjust robots_allowed based on result
+            if result == "blocked_by_robots":
+                robots_allowed = False
+            else:
+                # robots_allowed: True (80%) / False (20%)
+                robots_allowed = random.random() < 0.80
+
+            # Adjust http_status based on result
+            if result == "http_error_4xx":
+                http_status = get_http_status()  # This will give 403 or 404
+            else:
+                http_status = 200 if result in ["publicly_accessible", "poorly_extractable"] else 403
+
+            # noindex distribution: False (90%) / True (10%)
+            noindex = random.random() < 0.10
+
+            url_path = random.choice(striim_urls)
+            canonical_url = f"https://www.striim.com{url_path}"
+
+            checks.append({
+                "id": f"check-{uuid.uuid4().hex[:12]}",
+                "striim_url": url_path,
+                "crawler": random.choice(crawlers),
+                "robots_allowed": robots_allowed,
+                "http_status": http_status,
+                "response_time_ms": random.randint(10, 500),
+                "noindex": noindex,
+                "canonical_url": canonical_url,
+                "result": result,
+                "check_timestamp": check_timestamp.isoformat(),
+            })
+
+        return checks

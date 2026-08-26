@@ -197,6 +197,88 @@ def fetch_historical_trends(days=30):
     return trends
 
 
+def fetch_website_checks_for_run(run_id):
+    """Fetch website checks for a run."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT wc.* FROM website_checks wc ORDER BY wc.check_timestamp DESC LIMIT 100")
+    checks = cursor.fetchall()
+    conn.close()
+    return checks
+
+
+def fetch_website_checks_by_crawler(run_id=None):
+    """Fetch website checks grouped by crawler and result."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT crawler, result, COUNT(*) as count FROM website_checks GROUP BY crawler, result ORDER BY crawler")
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+
+def fetch_crawler_logs_summary():
+    """Fetch crawler logs summary with request and error counts."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT crawler, COUNT(*) as request_count, SUM(CASE WHEN http_status >= 400 THEN 1 ELSE 0 END) as error_count FROM crawler_logs GROUP BY crawler ORDER BY request_count DESC")
+    summary = cursor.fetchall()
+    conn.close()
+    return summary
+
+
+def fetch_crawler_logs_by_path():
+    """Fetch crawler logs grouped by path, crawler, and status."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT path, crawler, http_status, COUNT(*) as count FROM crawler_logs GROUP BY path, crawler, http_status ORDER BY count DESC LIMIT 50")
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+
+def fetch_crawler_log_failures():
+    """Fetch failed requests from crawler logs."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp, host, path, crawler, http_status, response_time_ms FROM crawler_logs WHERE http_status >= 400 ORDER BY timestamp DESC LIMIT 50")
+    failures = cursor.fetchall()
+    conn.close()
+    return failures
+
+
+def fetch_recommendations_for_approval(run_id):
+    """Fetch recommendations for approval with statuses: draft, pending_approval, pending_publish, edited."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT r.* FROM recommendations r
+        JOIN gaps g ON r.gap_id = g.id
+        WHERE g.run_id = ? AND r.status IN ('draft', 'pending_approval', 'pending_publish', 'edited')
+        ORDER BY r.priority DESC, r.created_timestamp DESC
+    """, (run_id,))
+    recommendations = cursor.fetchall()
+    conn.close()
+    return recommendations
+
+
+def fetch_recommendation_evidence(rec_id):
+    """Fetch evidence details for a recommendation (gap information, affected pages)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT r.id, r.gap_id, r.problem, r.evidence_summary, r.affected_pages,
+               g.topic, g.gap_type, g.striim_visibility, g.top_competitor_visibility,
+               g.top_competitor_name, g.priority as gap_priority, g.confidence
+        FROM recommendations r
+        JOIN gaps g ON r.gap_id = g.id
+        WHERE r.id = ?
+    """, (rec_id,))
+    evidence = cursor.fetchone()
+    conn.close()
+    return evidence
+
+
 def format_metric_card(label, value, change=None, subtext=None):
     """Create a formatted metric card."""
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -595,6 +677,430 @@ def render_citation_analysis_view(run):
                 st.plotly_chart(fig, use_container_width=True)
 
 
+def render_request_logs_view(run):
+    """Render the Request Logs view."""
+    st.subheader("Request Logs")
+
+    # Fetch logs data
+    summary = fetch_crawler_logs_summary()
+    by_path = fetch_crawler_logs_by_path()
+    failures = fetch_crawler_log_failures()
+
+    if not summary and not by_path and not failures:
+        st.info("No request log data available yet.")
+        return
+
+    # Calculate aggregate metrics
+    total_requests = sum(row['request_count'] for row in summary) if summary else 0
+    total_errors = sum(row['error_count'] or 0 for row in summary) if summary else 0
+    error_rate = (total_errors / total_requests * 100) if total_requests > 0 else 0
+
+    # Display metric cards
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Total Requests", total_requests)
+
+    with col2:
+        st.metric("Failed Requests", total_errors)
+
+    with col3:
+        st.metric("Error Rate %", f"{error_rate:.1f}%")
+
+    st.divider()
+
+    # Crawler Activity Table
+    if summary:
+        st.markdown("#### Crawler Activity")
+
+        df_crawler_activity = pd.DataFrame([
+            {
+                'Crawler': row['crawler'],
+                'Requests': row['request_count'],
+                'Errors': row['error_count'] or 0,
+                'Error Rate': f"{(row['error_count'] or 0) / row['request_count'] * 100:.1f}%" if row['request_count'] > 0 else "0%"
+            }
+            for row in summary
+        ])
+
+        st.dataframe(df_crawler_activity, use_container_width=True, hide_index=True)
+    else:
+        st.info("No crawler activity data available.")
+
+    st.divider()
+
+    # Failed Requests Detail Table
+    if failures:
+        st.markdown("#### Failed Requests (Status >= 400)")
+
+        df_failures = pd.DataFrame([
+            {
+                'Time': row['timestamp'],
+                'Crawler': row['crawler'],
+                'Path': row['path'],
+                'Status': row['http_status'],
+                'Response (ms)': row['response_time_ms']
+            }
+            for row in failures
+        ])
+
+        st.dataframe(df_failures, use_container_width=True, hide_index=True)
+    else:
+        st.info("No failed requests recorded.")
+
+    st.divider()
+
+    # Top Paths Accessed Table
+    if by_path:
+        st.markdown("#### Top Paths Accessed")
+
+        df_paths = pd.DataFrame([
+            {
+                'Path': row['path'],
+                'Crawler': row['crawler'],
+                'Status': row['http_status'],
+                'Count': row['count']
+            }
+            for row in by_path
+        ])
+
+        st.dataframe(df_paths, use_container_width=True, hide_index=True)
+    else:
+        st.info("No path data available.")
+
+
+def render_website_access_view(run):
+    """Render the Website Access view."""
+    st.subheader("Website Access")
+
+    checks = fetch_website_checks_for_run(run['run_id'])
+
+    if checks:
+        # Parse result data to count status categories
+        publicly_accessible = 0
+        blocked_error = 0
+        poorly_extractable = 0
+
+        for check in checks:
+            result = check['result'] or 'unknown'
+            if result == 'accessible':
+                publicly_accessible += 1
+            elif result in ('blocked', 'error'):
+                blocked_error += 1
+            elif result == 'poorly_extractable':
+                poorly_extractable += 1
+
+        total_checks = len(checks)
+
+        # Display metric cards
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric(
+                "Publicly Accessible",
+                publicly_accessible,
+                f"{publicly_accessible/total_checks:.1%}" if total_checks > 0 else "0%"
+            )
+
+        with col2:
+            st.metric(
+                "Blocked/Error",
+                blocked_error,
+                f"{blocked_error/total_checks:.1%}" if total_checks > 0 else "0%"
+            )
+
+        with col3:
+            st.metric(
+                "Poorly Extractable",
+                poorly_extractable,
+                f"{poorly_extractable/total_checks:.1%}" if total_checks > 0 else "0%"
+            )
+
+        with col4:
+            st.metric(
+                "Total Checks",
+                total_checks
+            )
+
+        # Display table with website check details
+        st.markdown("#### Website Check Details")
+
+        df_checks = pd.DataFrame([
+            {
+                'URL': c['striim_url'],
+                'Crawler': c['crawler'],
+                'Robots': c['robots_allowed'] if c['robots_allowed'] is not None else 'Unknown',
+                'HTTP': c['http_status'],
+                'Noindex': c['noindex'] if c['noindex'] is not None else 'Unknown',
+                'Result': c['result'] or 'Unknown'
+            }
+            for c in checks
+        ])
+
+        st.dataframe(df_checks, use_container_width=True, hide_index=True)
+
+        # Display result summary bar chart
+        st.markdown("#### Result Summary")
+
+        crawler_results = fetch_website_checks_by_crawler(run['run_id'])
+        if crawler_results:
+            df_summary = pd.DataFrame([
+                {
+                    'Crawler': r['crawler'],
+                    'Result': r['result'] or 'Unknown',
+                    'Count': r['count']
+                }
+                for r in crawler_results
+            ])
+
+            fig = px.bar(
+                df_summary,
+                x='Crawler',
+                y='Count',
+                color='Result',
+                barmode='group',
+                labels={'Count': 'Number of Checks', 'Crawler': 'Crawler Type'}
+            )
+            fig.update_layout(
+                height=400,
+                margin=dict(l=0, r=0, t=0, b=0),
+                template='plotly_white'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No website check data available yet. Run evaluations to see website access information.")
+
+
+def render_recommendations_view(run):
+    """Render the Recommendations management view."""
+    st.subheader("Recommendations")
+
+    # Status filter
+    col1, col2 = st.columns([2, 4])
+    with col1:
+        status_filter = st.selectbox(
+            "Filter by Status",
+            ["All For Approval", "Draft", "Pending Approval", "Pending Publish", "Edited"],
+            key="rec_status_filter"
+        )
+
+    recommendations = fetch_recommendations_for_approval(run['run_id'])
+
+    if not recommendations:
+        st.info("No recommendations found for this run.")
+        return
+
+    # Filter by status
+    filtered_recs = recommendations
+    if status_filter == "Draft":
+        filtered_recs = [r for r in recommendations if r['status'] == 'draft']
+    elif status_filter == "Pending Approval":
+        filtered_recs = [r for r in recommendations if r['status'] == 'pending_approval']
+    elif status_filter == "Pending Publish":
+        filtered_recs = [r for r in recommendations if r['status'] == 'pending_publish']
+    elif status_filter == "Edited":
+        filtered_recs = [r for r in recommendations if r['status'] == 'edited']
+
+    if not filtered_recs:
+        st.info(f"No recommendations with status: {status_filter}")
+        return
+
+    # Display recommendations
+    st.markdown(f"#### {len(filtered_recs)} Recommendation(s)")
+
+    # Status color mapping
+    status_colors = {
+        'draft': '🔵',
+        'pending_approval': '🟡',
+        'pending_publish': '🟢',
+        'edited': '🟠',
+        'approved': '✅',
+        'rejected': '❌',
+        'implemented': '🎯'
+    }
+
+    for rec in filtered_recs:
+        evidence = fetch_recommendation_evidence(rec['id'])
+
+        with st.container(border=True):
+            # Header with status badge and priority
+            col1, col2, col3 = st.columns([3, 1, 1])
+
+            with col1:
+                status_badge = status_colors.get(rec['status'], '❓')
+                status_label = rec['status'].replace('_', ' ').title()
+                st.markdown(f"**{status_badge} {status_label}**")
+
+            with col2:
+                priority_num = rec['priority'] or 0
+                st.markdown(f"**Priority:** {priority_num}/10")
+
+            with col3:
+                effort_num = rec['estimated_effort'] or 0
+                effort_labels = {1: 'Low', 2: 'Medium', 3: 'High'}
+                st.markdown(f"**Effort:** {effort_labels.get(effort_num, 'Unknown')}")
+
+            st.divider()
+
+            # Problem and Action
+            st.markdown(f"**Problem:** {rec['problem']}")
+            st.markdown(f"**Recommended Action:** {rec['recommended_action']}")
+
+            # Evidence summary
+            if rec['evidence_summary']:
+                st.markdown(f"**Evidence:** {rec['evidence_summary']}")
+
+            # Gap context
+            if evidence:
+                st.markdown(f"**Gap Context:** {evidence['topic']} - {evidence['gap_type'].title()}")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.caption(f"Striim Visibility: {evidence['striim_visibility']:.1%}")
+                with col2:
+                    st.caption(f"Competitor ({evidence['top_competitor_name']}): {evidence['top_competitor_visibility']:.1%}")
+                with col3:
+                    st.caption(f"Confidence: {evidence['confidence'].title()}")
+
+            # Affected pages
+            if rec['affected_pages']:
+                try:
+                    affected = json.loads(rec['affected_pages'])
+                    if affected:
+                        st.markdown("**Affected Pages:**")
+                        for page in affected[:5]:  # Show first 5
+                            st.caption(f"- {page}")
+                        if len(affected) > 5:
+                            st.caption(f"... and {len(affected) - 5} more")
+                except (json.JSONDecodeError, TypeError):
+                    st.caption(f"Affected Pages: {rec['affected_pages'][:100]}")
+
+            # Action buttons
+            st.divider()
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                if st.button("✏️ Edit", key=f"edit_{rec['id']}", use_container_width=True):
+                    st.session_state[f"edit_mode_{rec['id']}"] = not st.session_state.get(f"edit_mode_{rec['id']}", False)
+                    st.rerun()
+
+            with col2:
+                if st.button("✅ Approve", key=f"approve_{rec['id']}", use_container_width=True):
+                    try:
+                        from aeo_eval.storage.sqlite_store import SQLiteStore
+                        store = SQLiteStore(_db_path())
+                        store.update_recommendation_status(
+                            rec['id'],
+                            'approved',
+                            approved_by='dashboard_user'
+                        )
+                        st.success("Recommendation approved!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to approve: {str(e)}")
+
+            with col3:
+                if st.button("❌ Reject", key=f"reject_{rec['id']}", use_container_width=True):
+                    st.session_state[f"reject_mode_{rec['id']}"] = not st.session_state.get(f"reject_mode_{rec['id']}", False)
+                    st.rerun()
+
+            with col4:
+                if st.button("📋 Details", key=f"details_{rec['id']}", use_container_width=True):
+                    st.session_state[f"details_mode_{rec['id']}"] = not st.session_state.get(f"details_mode_{rec['id']}", False)
+                    st.rerun()
+
+            # Edit mode
+            if st.session_state.get(f"edit_mode_{rec['id']}", False):
+                st.markdown("##### Edit Recommendation")
+                with st.form(f"edit_form_{rec['id']}"):
+                    edited_problem = st.text_area(
+                        "Problem",
+                        value=rec['problem'],
+                        key=f"problem_{rec['id']}"
+                    )
+                    edited_action = st.text_area(
+                        "Recommended Action",
+                        value=rec['recommended_action'],
+                        key=f"action_{rec['id']}"
+                    )
+                    edited_priority = st.slider(
+                        "Priority (1-10)",
+                        1, 10,
+                        value=rec['priority'] or 5,
+                        key=f"priority_{rec['id']}"
+                    )
+                    edited_effort = st.select_slider(
+                        "Estimated Effort",
+                        options=[1, 2, 3],
+                        value=rec['estimated_effort'] or 2,
+                        format_func=lambda x: {1: 'Low', 2: 'Medium', 3: 'High'}.get(x, str(x)),
+                        key=f"effort_{rec['id']}"
+                    )
+
+                    if st.form_submit_button("💾 Save Changes"):
+                        try:
+                            from aeo_eval.storage.sqlite_store import SQLiteStore
+                            import sqlite3
+                            conn = sqlite3.connect(_db_path())
+                            conn.execute("PRAGMA foreign_keys = ON")
+                            conn.execute("""
+                                UPDATE recommendations
+                                SET problem = ?, recommended_action = ?, priority = ?, estimated_effort = ?, status = 'edited'
+                                WHERE id = ?
+                            """, (edited_problem, edited_action, edited_priority, edited_effort, rec['id']))
+                            conn.commit()
+                            conn.close()
+                            st.success("Recommendation updated!")
+                            st.session_state[f"edit_mode_{rec['id']}"] = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to save: {str(e)}")
+
+            # Reject mode
+            if st.session_state.get(f"reject_mode_{rec['id']}", False):
+                st.markdown("##### Reject Recommendation")
+                with st.form(f"reject_form_{rec['id']}"):
+                    reject_reason = st.text_area(
+                        "Reason for rejection",
+                        key=f"reject_reason_{rec['id']}"
+                    )
+
+                    if st.form_submit_button("❌ Confirm Rejection"):
+                        try:
+                            from aeo_eval.storage.sqlite_store import SQLiteStore
+                            store = SQLiteStore(_db_path())
+                            store.update_recommendation_status(
+                                rec['id'],
+                                'rejected',
+                                approved_by='dashboard_user',
+                                review_notes=reject_reason
+                            )
+                            st.success("Recommendation rejected!")
+                            st.session_state[f"reject_mode_{rec['id']}"] = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to reject: {str(e)}")
+
+            # Details mode
+            if st.session_state.get(f"details_mode_{rec['id']}", False):
+                st.markdown("##### Full Details")
+                details_col1, details_col2 = st.columns(2)
+
+                with details_col1:
+                    st.caption(f"**ID:** {rec['id']}")
+                    st.caption(f"**Gap ID:** {rec['gap_id']}")
+                    st.caption(f"**Created:** {rec['created_timestamp']}")
+                    if rec['approved_by']:
+                        st.caption(f"**Approved By:** {rec['approved_by']}")
+
+                with details_col2:
+                    if rec['measurement_plan']:
+                        st.caption(f"**Measurement Plan:** {rec['measurement_plan']}")
+                    if rec['suggested_owner']:
+                        st.caption(f"**Suggested Owner:** {rec['suggested_owner']}")
+                    if rec['review_notes']:
+                        st.caption(f"**Review Notes:** {rec['review_notes']}")
+
+
 def main():
     """Main Streamlit app."""
     st.set_page_config(
@@ -720,11 +1226,14 @@ def main():
     st.divider()
 
     # Tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Visibility Metrics",
         "Gaps & Recommendations",
         "Citation Analysis",
-        "Run Comparison"
+        "Run Comparison",
+        "Website Access",
+        "Request Logs",
+        "Recommendations Management"
     ])
 
     with tab1:
@@ -738,6 +1247,15 @@ def main():
 
     with tab4:
         render_comparison_view(all_runs)
+
+    with tab5:
+        render_website_access_view(run)
+
+    with tab6:
+        render_request_logs_view(run)
+
+    with tab7:
+        render_recommendations_view(run)
 
 
 if __name__ == "__main__":

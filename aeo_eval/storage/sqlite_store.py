@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import sqlite3
+import logging
 from pathlib import Path
 from typing import Iterable, List, Dict, Optional
 import json
 
 from aeo_eval.models.result import RunResult, EvaluationRun
 from aeo_eval.models.analysis import ResponseAnalysisOutput
+
+logger = logging.getLogger(__name__)
 
 MEMORY_SENTINEL = ":memory:"
 # A *named* shared-cache in-memory database. Plain ":memory:" gives every
@@ -577,7 +580,19 @@ class SQLiteStore:
             conn.commit()
 
     def save_recommendation(self, recommendation: Dict) -> None:
-        """Save a recommendation."""
+        """Save a recommendation.
+
+        Handles the will_auto_publish field from the recommendation dict:
+        - If will_auto_publish is True, status is set to "pending_publish"
+        - If will_auto_publish is False, status is set to "draft"
+
+        Args:
+            recommendation: Recommendation dict with keys:
+                - id, gap_id, problem, evidence_summary, recommended_action,
+                  affected_pages, suggested_owner, priority, estimated_effort,
+                  measurement_plan, confidence, will_auto_publish, created_timestamp
+                The status field is derived from will_auto_publish if not explicitly set.
+        """
         import json
 
         with self._connect() as conn:
@@ -608,6 +623,54 @@ class SQLiteStore:
             )
             conn.commit()
 
+    def save_recommendations(self, recommendations: List[Dict]) -> None:
+        """Save multiple recommendations in a single transaction.
+
+        Handles the will_auto_publish field for each recommendation:
+        - If will_auto_publish is True, status is set to "pending_publish"
+        - If will_auto_publish is False, status is set to "draft"
+
+        Args:
+            recommendations: List of recommendation dicts
+        """
+        import json
+
+        if not recommendations:
+            return
+
+        with self._connect() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            try:
+                for recommendation in recommendations:
+                    conn.execute(
+                        """
+                        INSERT INTO recommendations
+                        (id, gap_id, problem, evidence_summary, recommended_action,
+                         affected_pages, suggested_owner, priority, estimated_effort,
+                         measurement_plan, confidence, status, created_timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            recommendation["id"],
+                            recommendation["gap_id"],
+                            recommendation["problem"],
+                            recommendation["evidence_summary"],
+                            recommendation["recommended_action"],
+                            json.dumps(recommendation.get("affected_pages", [])),
+                            recommendation["suggested_owner"],
+                            recommendation["priority"],
+                            recommendation["estimated_effort"],
+                            recommendation["measurement_plan"],
+                            recommendation["confidence"],
+                            recommendation["status"],
+                            recommendation["created_timestamp"],
+                        ),
+                    )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
     def update_recommendation_status(
         self,
         recommendation_id: str,
@@ -636,3 +699,294 @@ class SQLiteStore:
                 ),
             )
             conn.commit()
+
+    def get_recommendation(self, rec_id: str) -> Optional[Dict]:
+        """Fetch a single recommendation with all details.
+
+        Args:
+            rec_id: The recommendation ID to fetch
+
+        Returns:
+            Dictionary with recommendation details, or None if not found
+        """
+        with self._connect() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, gap_id, problem, evidence_summary, recommended_action,
+                       affected_pages, suggested_owner, priority, estimated_effort,
+                       measurement_plan, confidence, status, created_by, approved_by,
+                       approval_timestamp, review_notes, created_timestamp, created_at
+                FROM recommendations
+                WHERE id = ?
+                """,
+                (rec_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                rec_dict = dict(row)
+                # Parse JSON fields
+                if rec_dict.get("affected_pages"):
+                    try:
+                        rec_dict["affected_pages"] = json.loads(rec_dict["affected_pages"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if rec_dict.get("review_notes"):
+                    try:
+                        rec_dict["review_notes"] = json.loads(rec_dict["review_notes"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                return rec_dict
+            return None
+
+    def update_recommendation(self, rec_id: str, updates: dict) -> bool:
+        """Update recommendation with provided fields.
+
+        Updates any of: problem, recommended_action, priority, estimated_effort,
+        status, review_notes. Uses transactions with proper error handling.
+
+        Args:
+            rec_id: The recommendation ID to update
+            updates: Dictionary of fields to update (can include any recommendation field)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not updates:
+            logger.warning(f"No updates provided for recommendation {rec_id}")
+            return False
+
+        # Allowed fields that can be updated
+        allowed_fields = {
+            "problem", "recommended_action", "priority", "estimated_effort",
+            "status", "review_notes", "suggested_owner", "measurement_plan",
+            "confidence", "affected_pages"
+        }
+
+        # Filter updates to only allowed fields
+        safe_updates = {k: v for k, v in updates.items() if k in allowed_fields}
+
+        if not safe_updates:
+            logger.warning(f"No valid update fields provided for recommendation {rec_id}")
+            return False
+
+        try:
+            with self._connect() as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+
+                # Build dynamic UPDATE statement
+                set_clauses = [f"{field} = ?" for field in safe_updates.keys()]
+                set_string = ", ".join(set_clauses)
+                values = list(safe_updates.values())
+                values.append(rec_id)
+
+                sql = f"""
+                    UPDATE recommendations
+                    SET {set_string}
+                    WHERE id = ?
+                """
+
+                cursor = conn.execute(sql, values)
+                conn.commit()
+
+                if cursor.rowcount > 0:
+                    logger.info(f"Updated recommendation {rec_id} with fields: {list(safe_updates.keys())}")
+                    return True
+                else:
+                    logger.warning(f"No recommendation found with ID {rec_id}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Error updating recommendation {rec_id}: {e}")
+            return False
+
+    def approve_recommendation(self, rec_id: str, approved_by: str) -> bool:
+        """Mark a recommendation as approved.
+
+        Sets status to 'approved', sets approval_timestamp to now, and records
+        the approver.
+
+        Args:
+            rec_id: The recommendation ID to approve
+            approved_by: The identifier of who is approving (user, email, etc.)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        from datetime import datetime
+
+        try:
+            with self._connect() as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                now = datetime.now().isoformat()
+
+                cursor = conn.execute(
+                    """
+                    UPDATE recommendations
+                    SET status = ?, approved_by = ?, approval_timestamp = ?
+                    WHERE id = ?
+                    """,
+                    ("approved", approved_by, now, rec_id),
+                )
+                conn.commit()
+
+                if cursor.rowcount > 0:
+                    logger.info(f"Approved recommendation {rec_id} by {approved_by}")
+                    return True
+                else:
+                    logger.warning(f"No recommendation found with ID {rec_id}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Error approving recommendation {rec_id}: {e}")
+            return False
+
+    def reject_recommendation(self, rec_id: str, review_notes: str) -> bool:
+        """Mark a recommendation as rejected.
+
+        Sets status to 'rejected' and stores review_notes explaining the rejection.
+
+        Args:
+            rec_id: The recommendation ID to reject
+            review_notes: Notes explaining the rejection reason
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self._connect() as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+
+                # Store review_notes as JSON
+                review_data = json.dumps({"reason": review_notes}) if review_notes else None
+
+                cursor = conn.execute(
+                    """
+                    UPDATE recommendations
+                    SET status = ?, review_notes = ?
+                    WHERE id = ?
+                    """,
+                    ("rejected", review_data, rec_id),
+                )
+                conn.commit()
+
+                if cursor.rowcount > 0:
+                    logger.info(f"Rejected recommendation {rec_id}")
+                    return True
+                else:
+                    logger.warning(f"No recommendation found with ID {rec_id}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Error rejecting recommendation {rec_id}: {e}")
+            return False
+
+    def store_website_checks(self, records: List[Dict]) -> int:
+        """Store website accessibility check results.
+
+        Args:
+            records: List of check records with keys matching website_checks table:
+                - id: Unique identifier
+                - striim_url: The URL checked
+                - crawler: Crawler user-agent
+                - robots_allowed: Boolean (0/1)
+                - in_sitemap: Boolean (0/1) or None
+                - http_status: HTTP status code or None
+                - response_time_ms: Response time in milliseconds or None
+                - noindex: Boolean (0/1)
+                - canonical_url: Canonical URL or None
+                - result: Classification string
+                - check_timestamp: ISO format timestamp
+
+        Returns:
+            Number of records inserted
+        """
+        if not records:
+            return 0
+
+        with self._connect() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            try:
+                for record in records:
+                    conn.execute(
+                        """
+                        INSERT INTO website_checks
+                        (id, striim_url, crawler, robots_allowed, in_sitemap,
+                         http_status, response_time_ms, noindex, canonical_url,
+                         result, check_timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            record["id"],
+                            record["striim_url"],
+                            record["crawler"],
+                            record.get("robots_allowed"),
+                            record.get("in_sitemap"),
+                            record.get("http_status"),
+                            record.get("response_time_ms"),
+                            record.get("noindex"),
+                            record.get("canonical_url"),
+                            record["result"],
+                            record["check_timestamp"],
+                        ),
+                    )
+                conn.commit()
+                return len(records)
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Error storing website checks: {e}")
+                raise
+
+    def store_crawler_logs(self, records: List[Dict]) -> int:
+        """Store AI crawler activity from request logs.
+
+        Args:
+            records: List of crawler log records from RequestLogAnalyzer with keys:
+                - id: Unique identifier
+                - timestamp: ISO format timestamp of the request
+                - host: Request host/domain
+                - path: Normalized request path
+                - crawler: Identified crawler name (e.g. "oai-searchbot")
+                - http_status: HTTP status code
+                - response_time_ms: Response time in milliseconds or None
+                - edge_action: Classification of response ("allowed", "blocked", "rate_limited", "error")
+                - log_source: Source of the log (e.g. "request_log")
+                - ua_classification: Dict with classifier output (not stored in DB, metadata only)
+
+        Returns:
+            Number of records inserted
+        """
+        if not records:
+            return 0
+
+        with self._connect() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            try:
+                for record in records:
+                    conn.execute(
+                        """
+                        INSERT INTO crawler_logs
+                        (id, timestamp, host, path, crawler, http_status,
+                         response_time_ms, edge_action, log_source)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            record.get("id"),
+                            record.get("timestamp"),
+                            record.get("host"),
+                            record.get("path"),
+                            record.get("crawler"),
+                            record.get("http_status"),
+                            record.get("response_time_ms"),
+                            record.get("edge_action"),
+                            record.get("log_source"),
+                        ),
+                    )
+                conn.commit()
+                return len(records)
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Error storing crawler logs: {e}")
+                raise
