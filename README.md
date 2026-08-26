@@ -1,6 +1,6 @@
 # AEO Visibility Platform — Answer Engine Evaluation Runner
 
-A production-ready platform that evaluates how your company (Striim) appears in AI-generated answers, analyzes citations, detects website-access issues, and generates actionable recommendations to improve AI visibility and discoverability.
+A platform that evaluates how Striim appears in AI-generated answers, analyzes citations, detects website-access issues, and generates  recommendations to improve AI visibility and discoverability.
 
 ## What This Does
 
@@ -578,18 +578,3 @@ streamlit run streamlit_app.py --logger.level=debug
 - **Referral Traffic** — Track AI-driven traffic from specific engines
 - **Slack/Email Summaries** — Automated reporting
 - **UI Polish** — Streamlit dashboard enhancements
-
-## Contributing
-
-This project is in active development. Contributions welcome.
-
-## Support
-
-For questions, issues, or feedback:
-- Check the spec.md for detailed module specifications
-- Review test files for usage examples
-- Open an issue on GitHub
-
----
-
-**Built with Python, Pydantic, SQLite, Claude, and a passion for AI visibility.**
