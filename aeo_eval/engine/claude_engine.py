@@ -106,13 +106,13 @@ class ClaudeEngine(BaseEngine):
             logger.debug(f"Calling Claude API (model={self.model_name})")
             message = self._retry_manager.retry(_call_claude)
 
-            # Extract response and token counts
+            # Extract response and token counts (defensively handle None at any level)
             response_text = message.content[0].text if message.content else ""
-            input_tokens = message.usage.input_tokens if message.usage else 0
-            output_tokens = message.usage.output_tokens if message.usage else 0
+            input_tokens = (message.usage.input_tokens if message.usage else None) or 0
+            output_tokens = (message.usage.output_tokens if message.usage else None) or 0
 
             # Calculate actual cost
-            actual_cost = self.estimate_cost(input_tokens or 0, output_tokens or 0)
+            actual_cost = self.estimate_cost(input_tokens, output_tokens)
 
             # Calculate latency
             latency_ms = int((datetime.now() - start_time).total_seconds() * 1000)
@@ -242,8 +242,8 @@ class ClaudeEngine(BaseEngine):
 
         message = self._retry_manager.retry(_call_claude_structured)
         response_text = message.content[0].text if message.content else ""
-        input_tokens = message.usage.input_tokens if message.usage else 0
-        output_tokens = message.usage.output_tokens if message.usage else 0
+        input_tokens = (message.usage.input_tokens if message.usage else None) or 0
+        output_tokens = (message.usage.output_tokens if message.usage else None) or 0
 
         try:
             data = json.loads(response_text)
@@ -253,9 +253,9 @@ class ClaudeEngine(BaseEngine):
 
         return StructuredCallResult(
             data=data,
-            input_tokens=input_tokens or 0,
-            output_tokens=output_tokens or 0,
-            cost=self.estimate_cost(input_tokens or 0, output_tokens or 0),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost=self.estimate_cost(input_tokens, output_tokens),
         )
 
     def get_token_costs(self) -> Dict[str, float]:
