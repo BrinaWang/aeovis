@@ -336,9 +336,9 @@ class Evaluator:
 
                 if result.status == "success":
                     succeeded += 1
-                    if result.input_tokens:
+                    if result.input_tokens is not None:
                         total_input_tokens += result.input_tokens
-                    if result.output_tokens:
+                    if result.output_tokens is not None:
                         total_output_tokens += result.output_tokens
                 else:
                     failed += 1

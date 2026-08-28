@@ -72,6 +72,8 @@ class RateLimiter:
         Returns:
             Time waited in seconds
         """
+        prompt_tokens = prompt_tokens or 0
+        completion_tokens = completion_tokens or 0
         total_tokens = prompt_tokens + completion_tokens
         start_time = time.time()
 
