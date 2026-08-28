@@ -1,9 +1,29 @@
 """Streamlit dashboard for AEO Visibility Platform."""
 
+import os
+from pathlib import Path
+
+# Load .env from project root - essential for API keys
 try:
     from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
+    # Start from the directory containing this file and look up
+    dashboard_dir = Path(__file__).resolve().parent
+    project_root = dashboard_dir.parent.parent
+
+    # Look for .env in multiple locations: project root, parent, current dir
+    env_search_paths = [
+        project_root / ".env",
+        project_root.parent / ".env",
+        Path.cwd() / ".env",
+    ]
+
+    for env_path in env_search_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            break
+except (ImportError, Exception):
+    # If python-dotenv not available or fails, continue anyway
+    # ANTHROPIC_API_KEY might be set in environment already
     pass
 
 import sqlite3

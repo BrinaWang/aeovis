@@ -40,11 +40,17 @@ class ClaudeEngine(BaseEngine):
         """
         super().__init__(config)
 
+        import os
         api_key = self.config.get("api_key")
         if not api_key:
-            raise ValueError(
-                "ANTHROPIC_API_KEY required. Set via config or ANTHROPIC_API_KEY env var."
+            # Provide more helpful error message
+            env_key_set = "ANTHROPIC_API_KEY" in os.environ
+            msg = (
+                "ANTHROPIC_API_KEY required. Set via config or ANTHROPIC_API_KEY env var. "
+                f"(env var present: {env_key_set})"
             )
+            logger.error(msg)
+            raise ValueError(msg)
 
         self.client = Anthropic(api_key=api_key)
         self.model_name = self.config.get("model_name", "claude-opus-5")
