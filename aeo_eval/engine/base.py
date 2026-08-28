@@ -71,15 +71,23 @@ class BaseEngine(ABC):
         Estimate cost for a given number of tokens.
 
         Args:
-            prompt_tokens: Number of input tokens
-            completion_tokens: Number of output tokens
+            prompt_tokens: Number of input tokens (can be None)
+            completion_tokens: Number of output tokens (can be None)
 
         Returns:
             Estimated cost in dollars
         """
+        # Defensive: handle None tokens at this layer too
+        prompt_tokens = prompt_tokens or 0
+        completion_tokens = completion_tokens or 0
+
         costs = self.get_token_costs()
-        input_cost = (prompt_tokens / 1000.0) * costs["input"]
-        output_cost = (completion_tokens / 1000.0) * costs["output"]
+        # Defensive: handle None costs as well
+        input_cost_per_1k = (costs.get("input") or 0.003)
+        output_cost_per_1k = (costs.get("output") or 0.015)
+
+        input_cost = (prompt_tokens / 1000.0) * input_cost_per_1k
+        output_cost = (completion_tokens / 1000.0) * output_cost_per_1k
         return input_cost + output_cost
 
     def get_token_costs(self) -> Dict[str, float]:
