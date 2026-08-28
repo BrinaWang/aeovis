@@ -106,8 +106,15 @@ class ClaudeEngine(BaseEngine):
             logger.debug(f"Calling Claude API (model={self.model_name})")
             message = self._retry_manager.retry(_call_claude)
 
-            # Extract response and token counts (defensively handle None at any level)
-            response_text = message.content[0].text if message.content else ""
+            # Extract response text, handling both TextBlock and ThinkingBlock content
+            response_text = ""
+            if message.content:
+                for block in message.content:
+                    if hasattr(block, 'text'):
+                        response_text = block.text
+                        break
+
+            # Extract token counts (defensively handle None at any level)
             input_tokens = (message.usage.input_tokens if message.usage else None) or 0
             output_tokens = (message.usage.output_tokens if message.usage else None) or 0
 
@@ -243,7 +250,12 @@ class ClaudeEngine(BaseEngine):
             )
 
         message = self._retry_manager.retry(_call_claude_structured)
-        response_text = message.content[0].text if message.content else ""
+        response_text = ""
+        if message.content:
+            for block in message.content:
+                if hasattr(block, 'text'):
+                    response_text = block.text
+                    break
         input_tokens = (message.usage.input_tokens if message.usage else None) or 0
         output_tokens = (message.usage.output_tokens if message.usage else None) or 0
 
