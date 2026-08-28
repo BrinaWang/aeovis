@@ -400,7 +400,7 @@ def render_visibility_metrics_view(run):
     with col2:
         st.metric("Prompts", run['num_prompts'])
     with col3:
-        cost_per_prompt = (run['cost'] / run['num_prompts']) if run['num_prompts'] > 0 else 0
+        cost_per_prompt = ((run['cost'] or 0) / run['num_prompts']) if run['num_prompts'] > 0 else 0
         st.metric("Cost/Prompt", f"${cost_per_prompt:.4f}")
     with col4:
         duration = run['duration_seconds'] or 0
@@ -417,26 +417,30 @@ def render_visibility_metrics_view(run):
             col1, col2, col3, col4 = st.columns(4)
 
             with col1:
+                mention_rate = overall['striim_mention_rate'] or 0
                 st.metric(
                     "Mention Rate",
-                    f"{overall['striim_mention_rate']:.1%}",
+                    f"{mention_rate:.1%}",
                     f"{overall['num_responses']} responses"
                 )
 
             with col2:
                 avg_pos = overall['striim_avg_position']
                 subtext = f"Avg Position: {avg_pos:.1f}" if avg_pos is not None else "Avg Position: —"
+                top3_rate = overall['striim_top3_rate'] or 0
                 st.metric(
                     "Top-3 Placement",
-                    f"{overall['striim_top3_rate']:.1%}",
+                    f"{top3_rate:.1%}",
                     subtext
                 )
 
             with col3:
+                citation_rate = overall['striim_citation_rate'] or 0
+                recommendation_rate = overall['striim_recommendation_rate'] or 0
                 st.metric(
                     "Citation Rate",
-                    f"{overall['striim_citation_rate']:.1%}",
-                    f"Recommendation: {overall['striim_recommendation_rate']:.1%}"
+                    f"{citation_rate:.1%}",
+                    f"Recommendation: {recommendation_rate:.1%}"
                 )
 
             with col4:
@@ -671,7 +675,7 @@ def render_comparison_view(all_runs):
                 'Recommendation Rate': overall['striim_recommendation_rate'] or 0,
                 'Responses': overall['num_responses'],
                 'Cost': run['cost'] or 0,
-                'Cost/Prompt': (run['cost'] / run['num_prompts']) if run['num_prompts'] > 0 else 0
+                'Cost/Prompt': ((run['cost'] or 0) / run['num_prompts']) if run['num_prompts'] > 0 else 0
             })
 
     if all_metrics:
