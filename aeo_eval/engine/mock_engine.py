@@ -208,7 +208,7 @@ class RandomMockEngine(BaseEngine):
 
         # Generate and store mock test data
         try:
-            self._generate_and_store_test_data()
+            self._generate_and_store_test_data(run_id)
         except Exception as e:
             logger.warning(f"Failed to generate and store test data: {e}")
 
@@ -230,11 +230,14 @@ class RandomMockEngine(BaseEngine):
             run_type="manual",
         )
 
-    def _generate_and_store_test_data(self) -> None:
+    def _generate_and_store_test_data(self, run_id: str) -> None:
         """Generate mock crawler logs and website checks, then store them in the database.
 
         Handles transformation from generated format to database schema and gracefully
         logs any storage failures without propagating them.
+
+        Args:
+            run_id: The evaluation run ID to associate with this test data
         """
         try:
             # Initialize store with database path from config
@@ -243,27 +246,28 @@ class RandomMockEngine(BaseEngine):
 
             # Generate crawler logs
             raw_crawler_logs = self.generate_mock_crawler_logs(count=20)
-            transformed_crawler_logs = self._transform_crawler_logs(raw_crawler_logs)
+            transformed_crawler_logs = self._transform_crawler_logs(raw_crawler_logs, run_id)
             stored_count = store.store_crawler_logs(transformed_crawler_logs)
-            logger.info(f"Stored {stored_count} crawler log records")
+            logger.info(f"Stored {stored_count} crawler log records for run {run_id}")
 
             # Generate website checks
             raw_website_checks = self.generate_mock_website_checks(count=15)
-            transformed_website_checks = self._transform_website_checks(raw_website_checks)
+            transformed_website_checks = self._transform_website_checks(raw_website_checks, run_id)
             stored_count = store.store_website_checks(transformed_website_checks)
-            logger.info(f"Stored {stored_count} website check records")
+            logger.info(f"Stored {stored_count} website check records for run {run_id}")
 
         except Exception as e:
             logger.warning(f"Error generating/storing test data: {e}")
             raise
 
-    def _transform_crawler_logs(self, logs: list[dict]) -> list[dict]:
+    def _transform_crawler_logs(self, logs: list[dict], run_id: str) -> list[dict]:
         """Transform generated crawler logs to database schema format.
 
         Maps field names and converts edge_action based on HTTP status code.
 
         Args:
             logs: List of generated crawler log records
+            run_id: The evaluation run ID to associate with these logs
 
         Returns:
             List of transformed records ready for storage
@@ -281,6 +285,7 @@ class RandomMockEngine(BaseEngine):
 
             transformed_log = {
                 "id": log["id"],
+                "run_id": run_id,
                 "timestamp": log["timestamp"],
                 "host": log["host"],
                 "path": log["path"],
@@ -293,13 +298,14 @@ class RandomMockEngine(BaseEngine):
             transformed.append(transformed_log)
         return transformed
 
-    def _transform_website_checks(self, checks: list[dict]) -> list[dict]:
+    def _transform_website_checks(self, checks: list[dict], run_id: str) -> list[dict]:
         """Transform generated website checks to database schema format.
 
         Converts boolean fields to integers and adds any missing fields.
 
         Args:
             checks: List of generated website check records
+            run_id: The evaluation run ID to associate with these checks
 
         Returns:
             List of transformed records ready for storage
@@ -308,6 +314,7 @@ class RandomMockEngine(BaseEngine):
         for check in checks:
             transformed_check = {
                 "id": check["id"],
+                "run_id": run_id,
                 "striim_url": check["striim_url"],
                 "crawler": check["crawler"],
                 "robots_allowed": 1 if check["robots_allowed"] else 0,
