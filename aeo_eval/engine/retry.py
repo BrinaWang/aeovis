@@ -27,6 +27,8 @@ class RetryPolicy:
 
     def __post_init__(self):
         """Initialize default exception sets."""
+        if self.max_retries is None:
+            self.max_retries = 3
         if self.retryable_exceptions is None:
             self.retryable_exceptions = {
                 APITimeoutError,

@@ -112,7 +112,7 @@ class BaseEngine(ABC):
             RetryPolicy instance
         """
         if self._retry_policy is None:
-            max_retries = self.config.get("max_retries", 3)
+            max_retries = self.config.get("max_retries") or 3
             self._retry_policy = RetryPolicy(max_retries=max_retries)
         return self._retry_policy
 
@@ -126,8 +126,8 @@ class BaseEngine(ABC):
             RateLimiterConfig with TPM and RPM limits
         """
         return RateLimiterConfig(
-            tokens_per_minute=self.config.get("rate_limit_tpm", 150000),
-            requests_per_minute=self.config.get("rate_limit_rpm", 100),
+            tokens_per_minute=self.config.get("rate_limit_tpm") or 150000,
+            requests_per_minute=self.config.get("rate_limit_rpm") or 100,
         )
 
     def get_rate_limiter(self) -> RateLimiter:

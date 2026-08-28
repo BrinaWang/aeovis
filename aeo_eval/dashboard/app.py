@@ -60,19 +60,27 @@ def run_evaluation(engine_name: str, num_prompts: int, topic: str = None,
                    persona: str = None, priority: str = None):
     """Run a new evaluation."""
     try:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Starting evaluation: engine={engine_name}, num_prompts={num_prompts}")
+
         topic = None if topic in (None, "All Topics") else topic
         persona = None if persona in (None, "All Personas") else persona
         priority = None if priority in (None, "All Priorities") else priority
 
+        logger.info(f"Loading prompts from {config.general.question_json_path}")
         prompts = select_prompts(
             load_prompts(str(config.general.question_json_path)),
             topic=topic, priority=priority, limit=num_prompts,
         )
+        logger.info(f"Loaded {len(prompts)} prompts")
         if not prompts:
             return {"error": "No prompts found with selected filters"}
 
         # Initialize engine
+        logger.info(f"Creating engine: {engine_name}")
         engine = create_engine(engine_name)
+        logger.info(f"Engine created successfully")
 
         # Prepare run options
         run_options = RunOptions(
@@ -89,12 +97,17 @@ def run_evaluation(engine_name: str, num_prompts: int, topic: str = None,
             "db_path": _db_path(),
             "cost_limit_per_run": config.general.cost_limit_per_run,
         }
+        logger.info(f"Starting pipeline with db_path={pipeline_config['db_path']}")
         orchestrator = AEOPipelineOrchestrator(engine, pipeline_config)
         result = orchestrator.run_full_pipeline(prompts, run_options)
+        logger.info(f"Pipeline complete: {result}")
 
         return result
     except Exception as e:
-        return {"error": str(e)}
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Evaluation failed: {type(e).__name__}: {e}", exc_info=True)
+        return {"error": f"{type(e).__name__}: {str(e)}"}
 
 
 def get_db_connection():

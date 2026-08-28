@@ -196,7 +196,9 @@ class ClaudeEngine(BaseEngine):
 
         except Exception as e:
             latency_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            import traceback
             logger.error(f"Unexpected error: {type(e).__name__}: {e}")
+            logger.error(f"Stack trace:\n{traceback.format_exc()}")
             return RunResult(
                 run_id=run_id,
                 run_batch_id=run_batch_id,
