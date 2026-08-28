@@ -19,6 +19,7 @@ dependencies = [
     "streamlit>=1.28.0",
     "plotly>=5.17.0",
     "pandas>=2.0.0",
+    "trafilatura>=2.0.0",
 ]
 
 [project.optional-dependencies]

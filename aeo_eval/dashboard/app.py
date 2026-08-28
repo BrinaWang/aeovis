@@ -91,6 +91,61 @@ def fetch_all_runs():
     return runs
 
 
+def delete_run(run_id):
+    """Delete a run and all its related data in correct order."""
+    conn = get_db_connection()
+    conn.execute("PRAGMA foreign_keys = ON")
+    cursor = conn.cursor()
+
+    try:
+        # Get all related IDs BEFORE deleting anything
+        cursor.execute("SELECT id FROM gaps WHERE run_id = ?", (run_id,))
+        gap_ids = [row['id'] for row in cursor.fetchall()]
+
+        cursor.execute("SELECT id FROM raw_responses WHERE run_id = ?", (run_id,))
+        response_ids = [row['id'] for row in cursor.fetchall()]
+
+        cursor.execute("SELECT id FROM response_analysis WHERE raw_response_id IN ({})".format(
+            ','.join('?' * len(response_ids))
+        ) if response_ids else "SELECT id FROM response_analysis WHERE 1=0", response_ids)
+        analysis_ids = [row['id'] for row in cursor.fetchall()]
+
+        # Delete in order of dependencies (leaf nodes first)
+        # 1. citation_occurrences (depends on response_analysis and citations)
+        if analysis_ids:
+            cursor.execute("DELETE FROM citation_occurrences WHERE response_analysis_id IN ({})".format(
+                ','.join('?' * len(analysis_ids))
+            ), analysis_ids)
+
+        # 2. recommendations (depends on gaps)
+        if gap_ids:
+            cursor.execute("DELETE FROM recommendations WHERE gap_id IN ({})".format(
+                ','.join('?' * len(gap_ids))
+            ), gap_ids)
+
+        # 3. response_analysis (depends on raw_responses)
+        if response_ids:
+            cursor.execute("DELETE FROM response_analysis WHERE raw_response_id IN ({})".format(
+                ','.join('?' * len(response_ids))
+            ), response_ids)
+
+        # 4. Tables that directly reference evaluation_runs
+        cursor.execute("DELETE FROM gaps WHERE run_id = ?", (run_id,))
+        cursor.execute("DELETE FROM visibility_metrics WHERE run_id = ?", (run_id,))
+        cursor.execute("DELETE FROM raw_responses WHERE run_id = ?", (run_id,))
+
+        # 5. Finally delete the run itself
+        cursor.execute("DELETE FROM evaluation_runs WHERE run_id = ?", (run_id,))
+
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
 def fetch_latest_run():
     """Fetch the latest evaluation run."""
     conn = get_db_connection()
@@ -910,13 +965,13 @@ def render_recommendations_view(run):
 
     # Status color mapping
     status_colors = {
-        'draft': '🔵',
-        'pending_approval': '🟡',
-        'pending_publish': '🟢',
-        'edited': '🟠',
-        'approved': '✅',
-        'rejected': '❌',
-        'implemented': '🎯'
+        'draft': '',
+        'pending_approval': '',
+        'pending_publish': '',
+        'edited': '',
+        'approved': '',
+        'rejected': '',
+        'implemented': ''
     }
 
     for rec in filtered_recs:
@@ -929,7 +984,7 @@ def render_recommendations_view(run):
             with col1:
                 status_badge = status_colors.get(rec['status'], '❓')
                 status_label = rec['status'].replace('_', ' ').title()
-                st.markdown(f"**{status_badge} {status_label}**")
+                st.markdown(f"**{status_label}**")
 
             with col2:
                 priority_num = rec['priority'] or 0
@@ -979,12 +1034,12 @@ def render_recommendations_view(run):
             col1, col2, col3, col4 = st.columns(4)
 
             with col1:
-                if st.button("✏️ Edit", key=f"edit_{rec['id']}", use_container_width=True):
+                if st.button("Edit", key=f"edit_{rec['id']}", use_container_width=True):
                     st.session_state[f"edit_mode_{rec['id']}"] = not st.session_state.get(f"edit_mode_{rec['id']}", False)
                     st.rerun()
 
             with col2:
-                if st.button("✅ Approve", key=f"approve_{rec['id']}", use_container_width=True):
+                if st.button("Approve", key=f"approve_{rec['id']}", use_container_width=True):
                     try:
                         from aeo_eval.storage.sqlite_store import SQLiteStore
                         store = SQLiteStore(_db_path())
@@ -999,12 +1054,12 @@ def render_recommendations_view(run):
                         st.error(f"Failed to approve: {str(e)}")
 
             with col3:
-                if st.button("❌ Reject", key=f"reject_{rec['id']}", use_container_width=True):
+                if st.button("Reject", key=f"reject_{rec['id']}", use_container_width=True):
                     st.session_state[f"reject_mode_{rec['id']}"] = not st.session_state.get(f"reject_mode_{rec['id']}", False)
                     st.rerun()
 
             with col4:
-                if st.button("📋 Details", key=f"details_{rec['id']}", use_container_width=True):
+                if st.button("Details", key=f"details_{rec['id']}", use_container_width=True):
                     st.session_state[f"details_mode_{rec['id']}"] = not st.session_state.get(f"details_mode_{rec['id']}", False)
                     st.rerun()
 
@@ -1036,7 +1091,7 @@ def render_recommendations_view(run):
                         key=f"effort_{rec['id']}"
                     )
 
-                    if st.form_submit_button("💾 Save Changes"):
+                    if st.form_submit_button("Save Changes"):
                         try:
                             from aeo_eval.storage.sqlite_store import SQLiteStore
                             import sqlite3
@@ -1064,7 +1119,7 @@ def render_recommendations_view(run):
                         key=f"reject_reason_{rec['id']}"
                     )
 
-                    if st.form_submit_button("❌ Confirm Rejection"):
+                    if st.form_submit_button("Confirm Rejection"):
                         try:
                             from aeo_eval.storage.sqlite_store import SQLiteStore
                             store = SQLiteStore(_db_path())
@@ -1208,6 +1263,54 @@ def main():
             use_container_width=True,
             hide_index=True
         )
+
+        st.divider()
+        with st.expander("Clear Runs", expanded=False):
+            st.warning("This action cannot be undone!")
+
+            delete_option = st.radio(
+                "What would you like to delete?",
+                ["Delete a specific run", "Delete all runs"],
+                key="delete_option"
+            )
+
+            if delete_option == "Delete a specific run":
+                run_to_delete = st.selectbox(
+                    "Select run to delete:",
+                    range(len(all_runs)),
+                    format_func=lambda i: f"{all_runs[i]['run_id'][-8:]} • {datetime.fromisoformat(all_runs[i]['timestamp']).strftime('%Y-%m-%d %H:%M')} • {all_runs[i]['engine']}",
+                    key="run_to_delete"
+                )
+
+                st.checkbox("I understand this cannot be undone", key="confirm_delete_single")
+
+                if st.button("Delete Selected Run", type="secondary", use_container_width=True):
+                    if st.session_state.get("confirm_delete_single", False):
+                        try:
+                            delete_run(all_runs[run_to_delete]['run_id'])
+                            st.success(f"✓ Run {all_runs[run_to_delete]['run_id'][-8:]} deleted successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to delete run: {str(e)}")
+                    else:
+                        st.error("Please check the confirmation box before deleting.")
+
+            else:  # Delete all runs
+                st.error(f"This will delete all {len(all_runs)} runs!")
+                st.checkbox("I understand this cannot be undone and will delete ALL runs", key="confirm_delete_all")
+
+                if st.button("Delete All Runs", type="secondary", use_container_width=True):
+                    if st.session_state.get("confirm_delete_all", False):
+                        try:
+                            num_deleted = len(all_runs)
+                            for run in all_runs:
+                                delete_run(run['run_id'])
+                            st.success(f"✓ All {num_deleted} runs deleted successfully!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to delete runs: {str(e)}")
+                    else:
+                        st.error("Please check the confirmation box before deleting.")
 
     # Run info header
     col1, col2, col3, col4, col5 = st.columns(5)
