@@ -1,0 +1,113 @@
+- understand the code and the high level stuff that theyll ask u. 
+- then go into detail abt the implementation
+- change run names
+
+- cloudfare *** 
+- copy the other websites
+- robots.txt vs llms.txt
+- google gemini note taking
+
+- want to swap out the questinos to keep up with monthly trends
+- how to automate? maybe use questions to calude and code a text extracter...
+- review questions and personas, make sure they are accurate and the repository makes sense
+review the implementation... 
+cloudflare blocking
+
+
+not implemented: dashboard for approval
+
+
+Key Takeaways: What's NOT Implemented
+🔴 CRITICAL - NOT IMPLEMENTED (Whole Modules Missing)
+Module 6: Website & Crawler Accessibility (0% complete)
+
+No robots.txt parser
+No HTTP status checks, sitemap checks, noindex detection
+No llms.txt parser
+No content extractability checks (Trafilatura)
+No crawler UA simulation
+Impact: Can't check if Striim pages are actually accessible to AI crawlers
+Effort: 5-10 hours to implement
+Module 7: Request-Log Analysis (0% complete)
+
+No log parser
+No crawler traffic detection
+No spoofed crawler detection
+Impact: Can't see real crawler activity/failures
+Effort: 4-6 hours to implement
+🟡 IMPORTANT - PARTIALLY IMPLEMENTED
+Dashboard Approval Workflow (Blocking feature)
+
+Functions exist but not wired to UI
+Status shows "🟡 Pending Approval" but no buttons to approve/reject
+Workaround: Use SQL to manually update recommendations table
+Effort: 2-3 hours to add UI buttons + database persistence
+CLI Commands (Nice-to-have)
+
+
+❌ aeo_eval.cli history              # Says "not yet implemented"
+❌ aeo_eval.cli schedule --add ...   # Says "not yet implemented"
+❌ aeo_eval.cli schedule --list
+❌ aeo_eval.cli schedule --trigger
+Effort: 3-4 hours total
+Missing Engine Implementations
+
+✅ Claude - fully working
+✅ OpenAI - fully working
+❌ Gemini - config exists, engine code missing
+❌ Grok - config exists, engine code missing
+❌ Perplexity - config exists, engine code missing
+Metrics (Low impact)
+
+❌ By-persona breakdowns (code exists but not calculated/stored)
+❌ By-engine breakdowns (code exists but not calculated/stored)
+✅ WHAT'S FULLY WORKING
+✅ Load & run 75 buyer questions
+✅ Execute through Claude or OpenAI
+✅ Extract brands, claims, positions, sentiment
+✅ Calculate visibility metrics
+✅ Deduplicate citations
+✅ Detect gaps (visibility, citation)
+✅ Generate recommendations
+✅ Auto-approve high-confidence recs
+✅ Store everything in SQLite
+✅ View results in Streamlit dashboard (mostly)
+Bottom line: 75% complete. Modules 1-5 and 8-9 are solid. Module 6 & 7 would require significant new code. Dashboard approval UI is the highest-value quick fix.
+
+
+- want to swap out the questinos to keep up with monthly trends
+- how to automate? maybe use questions to calude and code a text extracter...
+
+TODO: 
+- review questions and personas, make sure they are accurate and the repository makes sense
+review the implementation... 
+cloudflare blocking
+
+
+
+
+
+ai for help, iterative thinking, 
+
+ICP: ideal customer profile
+
+company of 10 ppl → 5k. not ICP. deals range from 100-250k mark. sometimes 1M. 
+
+enterprises. big budgets. 
+
+not typically startups. 
+
+ask for a lot of examples. flow + example, abstract vs concrete
+
+agent experience, how agents experience a website. striim should be checking the boxes *** LOOK INTO AGENT EXPERIENCE 
+
+observability. designing how the model interacts with your system
+
+how to set a system that’s cost efficient? scraping on a schedule? 
+
+real time context layer for ai
+
+
+
+using api or putting it through 
+

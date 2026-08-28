@@ -252,51 +252,67 @@ def fetch_historical_trends(days=30):
     return trends
 
 
+def fetch_cost_trends(days=30):
+    """Fetch historical cost trends across runs."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    since = datetime.now() - timedelta(days=days)
+    cursor.execute("""
+        SELECT timestamp, engine, cost, num_prompts
+        FROM evaluation_runs
+        WHERE timestamp >= ?
+        ORDER BY timestamp
+    """, (since.isoformat(),))
+    trends = cursor.fetchall()
+    conn.close()
+    return trends
+
+
 def fetch_website_checks_for_run(run_id):
     """Fetch website checks for a run."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT wc.* FROM website_checks wc ORDER BY wc.check_timestamp DESC LIMIT 100")
+    cursor.execute("SELECT wc.* FROM website_checks wc WHERE wc.run_id = ? ORDER BY wc.check_timestamp DESC LIMIT 100", (run_id,))
     checks = cursor.fetchall()
     conn.close()
     return checks
 
 
-def fetch_website_checks_by_crawler(run_id=None):
-    """Fetch website checks grouped by crawler and result."""
+def fetch_website_checks_by_crawler(run_id):
+    """Fetch website checks grouped by crawler and result for a specific run."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT crawler, result, COUNT(*) as count FROM website_checks GROUP BY crawler, result ORDER BY crawler")
+    cursor.execute("SELECT crawler, result, COUNT(*) as count FROM website_checks WHERE run_id = ? GROUP BY crawler, result ORDER BY crawler", (run_id,))
     results = cursor.fetchall()
     conn.close()
     return results
 
 
-def fetch_crawler_logs_summary():
+def fetch_crawler_logs_summary(run_id):
     """Fetch crawler logs summary with request and error counts."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT crawler, COUNT(*) as request_count, SUM(CASE WHEN http_status >= 400 THEN 1 ELSE 0 END) as error_count FROM crawler_logs GROUP BY crawler ORDER BY request_count DESC")
+    cursor.execute("SELECT crawler, COUNT(*) as request_count, SUM(CASE WHEN http_status >= 400 THEN 1 ELSE 0 END) as error_count FROM crawler_logs WHERE run_id = ? GROUP BY crawler ORDER BY request_count DESC", (run_id,))
     summary = cursor.fetchall()
     conn.close()
     return summary
 
 
-def fetch_crawler_logs_by_path():
+def fetch_crawler_logs_by_path(run_id):
     """Fetch crawler logs grouped by path, crawler, and status."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT path, crawler, http_status, COUNT(*) as count FROM crawler_logs GROUP BY path, crawler, http_status ORDER BY count DESC LIMIT 50")
+    cursor.execute("SELECT path, crawler, http_status, COUNT(*) as count FROM crawler_logs WHERE run_id = ? GROUP BY path, crawler, http_status ORDER BY count DESC LIMIT 50", (run_id,))
     results = cursor.fetchall()
     conn.close()
     return results
 
 
-def fetch_crawler_log_failures():
+def fetch_crawler_log_failures(run_id):
     """Fetch failed requests from crawler logs."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT timestamp, host, path, crawler, http_status, response_time_ms FROM crawler_logs WHERE http_status >= 400 ORDER BY timestamp DESC LIMIT 50")
+    cursor.execute("SELECT timestamp, host, path, crawler, http_status, response_time_ms FROM crawler_logs WHERE run_id = ? AND http_status >= 400 ORDER BY timestamp DESC LIMIT 50", (run_id,))
     failures = cursor.fetchall()
     conn.close()
     return failures
@@ -350,6 +366,21 @@ def format_metric_card(label, value, change=None, subtext=None):
 def render_visibility_metrics_view(run):
     """Render the Visibility Metrics view."""
     st.subheader("Visibility Metrics")
+
+    # Display run cost and metadata at top
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Run Cost", f"${run['cost']:.4f}" if run['cost'] else "$0.00")
+    with col2:
+        st.metric("Prompts", run['num_prompts'])
+    with col3:
+        cost_per_prompt = (run['cost'] / run['num_prompts']) if run['num_prompts'] > 0 else 0
+        st.metric("Cost/Prompt", f"${cost_per_prompt:.4f}")
+    with col4:
+        duration = run['duration_seconds'] or 0
+        st.metric("Duration", f"{duration}s")
+
+    st.divider()
 
     metrics = fetch_metrics_for_run(run['run_id'])
 
@@ -454,6 +485,41 @@ def render_visibility_metrics_view(run):
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No historical data available yet. Run evaluations to see trends.")
+
+        # Cost trend chart
+        st.markdown("#### Cost Trend (Last 30 Days)")
+        cost_trends = fetch_cost_trends(30)
+
+        if cost_trends:
+            df_costs = pd.DataFrame([
+                {
+                    'Date': datetime.fromisoformat(t['timestamp']).date(),
+                    'Cost': t['cost'] or 0,
+                    'Engine': t['engine'],
+                    'Prompts': t['num_prompts']
+                }
+                for t in cost_trends
+            ])
+
+            fig = go.Figure()
+            for engine in df_costs['Engine'].unique():
+                engine_data = df_costs[df_costs['Engine'] == engine]
+                fig.add_trace(go.Scatter(
+                    x=engine_data['Date'], y=engine_data['Cost'],
+                    mode='lines+markers', name=engine,
+                    line=dict(width=2),
+                    marker=dict(size=6)
+                ))
+
+            fig.update_layout(
+                hovermode='x unified',
+                height=400,
+                margin=dict(l=0, r=0, t=0, b=0),
+                template='plotly_white',
+                yaxis_title='Cost ($)',
+                xaxis_title='Date'
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 
 def render_gaps_recommendations_view(run):
@@ -577,7 +643,9 @@ def render_comparison_view(all_runs):
                 'Top-3 Rate': overall['striim_top3_rate'] or 0,
                 'Citation Rate': overall['striim_citation_rate'] or 0,
                 'Recommendation Rate': overall['striim_recommendation_rate'] or 0,
-                'Responses': overall['num_responses']
+                'Responses': overall['num_responses'],
+                'Cost': run['cost'] or 0,
+                'Cost/Prompt': (run['cost'] / run['num_prompts']) if run['num_prompts'] > 0 else 0
             })
 
     if all_metrics:
@@ -737,9 +805,9 @@ def render_request_logs_view(run):
     st.subheader("Request Logs")
 
     # Fetch logs data
-    summary = fetch_crawler_logs_summary()
-    by_path = fetch_crawler_logs_by_path()
-    failures = fetch_crawler_log_failures()
+    summary = fetch_crawler_logs_summary(run['run_id'])
+    by_path = fetch_crawler_logs_by_path(run['run_id'])
+    failures = fetch_crawler_log_failures(run['run_id'])
 
     if not summary and not by_path and not failures:
         st.info("No request log data available yet.")
@@ -838,9 +906,9 @@ def render_website_access_view(run):
 
         for check in checks:
             result = check['result'] or 'unknown'
-            if result == 'accessible':
+            if result == 'publicly_accessible':
                 publicly_accessible += 1
-            elif result in ('blocked', 'error'):
+            elif result in ('blocked_by_robots', 'http_error_4xx'):
                 blocked_error += 1
             elif result == 'poorly_extractable':
                 poorly_extractable += 1

@@ -91,6 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_citation_occurrences_analysis_id ON citation_occu
 -- Module 6: Website accessibility checks
 CREATE TABLE IF NOT EXISTS website_checks (
     id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
     striim_url TEXT NOT NULL,
     crawler TEXT NOT NULL,
     robots_allowed INTEGER,
@@ -101,14 +102,17 @@ CREATE TABLE IF NOT EXISTS website_checks (
     canonical_url TEXT,
     result TEXT,              -- "publicly_accessible", "blocked_by_robots", "http_error_4xx", etc.
     check_timestamp DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (run_id) REFERENCES evaluation_runs(run_id)
 );
+CREATE INDEX IF NOT EXISTS idx_website_checks_run_id ON website_checks(run_id);
 CREATE INDEX IF NOT EXISTS idx_website_checks_striim_url_crawler ON website_checks(striim_url, crawler);
 CREATE INDEX IF NOT EXISTS idx_website_checks_check_timestamp ON website_checks(check_timestamp DESC);
 
 -- Module 7: AI crawler activity from request logs
 CREATE TABLE IF NOT EXISTS crawler_logs (
     id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
     timestamp DATETIME NOT NULL,
     host TEXT NOT NULL,
     path TEXT NOT NULL,
@@ -117,8 +121,10 @@ CREATE TABLE IF NOT EXISTS crawler_logs (
     response_time_ms INTEGER,
     edge_action TEXT,        -- "blocked", "allowed"
     log_source TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (run_id) REFERENCES evaluation_runs(run_id)
 );
+CREATE INDEX IF NOT EXISTS idx_crawler_logs_run_id ON crawler_logs(run_id);
 CREATE INDEX IF NOT EXISTS idx_crawler_logs_timestamp_crawler_host ON crawler_logs(timestamp DESC, crawler, host);
 CREATE INDEX IF NOT EXISTS idx_crawler_logs_host_path_crawler ON crawler_logs(host, path, crawler);
 CREATE INDEX IF NOT EXISTS idx_crawler_logs_http_status ON crawler_logs(http_status);

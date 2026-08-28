@@ -90,8 +90,8 @@ class BaseEngine(ABC):
             Dict with 'input' and 'output' keys (cost per 1k tokens)
         """
         return {
-            "input": self.config.get("cost_per_1k_input_tokens", 0.001),
-            "output": self.config.get("cost_per_1k_output_tokens", 0.001),
+            "input": self.config.get("cost_per_1k_input_tokens", 0.003),
+            "output": self.config.get("cost_per_1k_output_tokens", 0.015),
         }
 
     # Retry policy

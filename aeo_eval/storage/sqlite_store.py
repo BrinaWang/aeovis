@@ -889,6 +889,7 @@ class SQLiteStore:
         Args:
             records: List of check records with keys matching website_checks table:
                 - id: Unique identifier
+                - run_id: Evaluation run ID
                 - striim_url: The URL checked
                 - crawler: Crawler user-agent
                 - robots_allowed: Boolean (0/1)
@@ -913,13 +914,14 @@ class SQLiteStore:
                     conn.execute(
                         """
                         INSERT INTO website_checks
-                        (id, striim_url, crawler, robots_allowed, in_sitemap,
+                        (id, run_id, striim_url, crawler, robots_allowed, in_sitemap,
                          http_status, response_time_ms, noindex, canonical_url,
                          result, check_timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             record["id"],
+                            record["run_id"],
                             record["striim_url"],
                             record["crawler"],
                             record.get("robots_allowed"),
@@ -945,6 +947,7 @@ class SQLiteStore:
         Args:
             records: List of crawler log records from RequestLogAnalyzer with keys:
                 - id: Unique identifier
+                - run_id: Evaluation run ID
                 - timestamp: ISO format timestamp of the request
                 - host: Request host/domain
                 - path: Normalized request path
@@ -968,12 +971,13 @@ class SQLiteStore:
                     conn.execute(
                         """
                         INSERT INTO crawler_logs
-                        (id, timestamp, host, path, crawler, http_status,
+                        (id, run_id, timestamp, host, path, crawler, http_status,
                          response_time_ms, edge_action, log_source)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             record.get("id"),
+                            record["run_id"],
                             record.get("timestamp"),
                             record.get("host"),
                             record.get("path"),

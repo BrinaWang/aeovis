@@ -140,7 +140,7 @@ class Config(BaseModel):
         }
         for provider, env_var in env_map.items():
             if provider in v and env_var in os.environ:
-                v[provider].api_key = os.environ[env_var]
+                v[provider]['api_key'] = os.environ[env_var]
         return v
 
     @staticmethod
