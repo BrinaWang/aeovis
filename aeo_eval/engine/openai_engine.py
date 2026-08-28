@@ -103,11 +103,11 @@ class OpenAIEngine(BaseEngine):
 
             # Extract response and token counts
             response_text = response.choices[0].message.content if response.choices else ""
-            input_tokens = response.usage.prompt_tokens
-            output_tokens = response.usage.completion_tokens
+            input_tokens = response.usage.prompt_tokens if response.usage else 0
+            output_tokens = response.usage.completion_tokens if response.usage else 0
 
             # Calculate actual cost
-            actual_cost = self.estimate_cost(input_tokens, output_tokens)
+            actual_cost = self.estimate_cost(input_tokens or 0, output_tokens or 0)
 
             # Calculate latency
             latency_ms = int((datetime.now() - start_time).total_seconds() * 1000)
@@ -238,8 +238,8 @@ class OpenAIEngine(BaseEngine):
 
         response = self._retry_manager.retry(_call_openai_structured)
         response_text = response.choices[0].message.content if response.choices else ""
-        input_tokens = response.usage.prompt_tokens
-        output_tokens = response.usage.completion_tokens
+        input_tokens = response.usage.prompt_tokens if response.usage else 0
+        output_tokens = response.usage.completion_tokens if response.usage else 0
 
         try:
             data = json.loads(response_text)
@@ -249,9 +249,9 @@ class OpenAIEngine(BaseEngine):
 
         return StructuredCallResult(
             data=data,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost=self.estimate_cost(input_tokens, output_tokens),
+            input_tokens=input_tokens or 0,
+            output_tokens=output_tokens or 0,
+            cost=self.estimate_cost(input_tokens or 0, output_tokens or 0),
         )
 
     def get_token_costs(self) -> Dict[str, float]:
