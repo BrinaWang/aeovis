@@ -108,11 +108,11 @@ class ClaudeEngine(BaseEngine):
 
             # Extract response and token counts
             response_text = message.content[0].text if message.content else ""
-            input_tokens = message.usage.input_tokens
-            output_tokens = message.usage.output_tokens
+            input_tokens = message.usage.input_tokens if message.usage else 0
+            output_tokens = message.usage.output_tokens if message.usage else 0
 
             # Calculate actual cost
-            actual_cost = self.estimate_cost(input_tokens, output_tokens)
+            actual_cost = self.estimate_cost(input_tokens or 0, output_tokens or 0)
 
             # Calculate latency
             latency_ms = int((datetime.now() - start_time).total_seconds() * 1000)
