@@ -180,13 +180,9 @@ class RandomMockEngine(BaseEngine):
     def run(self, prompt_text: str) -> RunResult:
         """Run and return a random response from the pool.
 
-        Also auto-generates and stores test data:
-        - 20 fake crawler logs for AI bot activity
-        - 15 fake website accessibility checks
-
-        Generated data is stored in the SQLite database via store_crawler_logs()
-        and store_website_checks(). Storage errors are logged as warnings but do
-        not fail the run.
+        Note: Test data generation (crawler logs, website checks) is handled
+        separately via generate_test_data_for_run() to ensure proper run_id
+        association with the evaluation batch.
         """
         run_id = str(uuid.uuid4())
         start_time = datetime.now()
@@ -206,12 +202,6 @@ class RandomMockEngine(BaseEngine):
         # Calculate cost
         actual_cost = self.estimate_cost(input_tokens, output_tokens)
 
-        # Generate and store mock test data
-        try:
-            self._generate_and_store_test_data(run_id)
-        except Exception as e:
-            logger.warning(f"Failed to generate and store test data: {e}")
-
         return RunResult(
             run_id=run_id,
             run_batch_id="",
@@ -229,6 +219,21 @@ class RandomMockEngine(BaseEngine):
             run_timestamp=start_time,
             run_type="manual",
         )
+
+    def generate_test_data_for_run(self, evaluation_run_id: str) -> None:
+        """Generate and store mock test data associated with an evaluation run.
+
+        This is called by the orchestrator after an evaluation batch completes,
+        ensuring test data is properly associated with the evaluation_run.run_id.
+
+        Args:
+            evaluation_run_id: The evaluation_run.run_id to associate with generated data
+        """
+        try:
+            self._generate_and_store_test_data(evaluation_run_id)
+            logger.info(f"Generated test data for evaluation run {evaluation_run_id[:12]}")
+        except Exception as e:
+            logger.warning(f"Failed to generate test data for run {evaluation_run_id}: {e}")
 
     def _generate_and_store_test_data(self, run_id: str) -> None:
         """Generate mock crawler logs and website checks, then store them in the database.

@@ -115,6 +115,10 @@ class AEOPipelineOrchestrator:
                 f"{evaluation_run.prompts_failed} failed)"
             )
 
+            # Generate test data for mock engines (properly associated with evaluation run)
+            if self.engine.name == "random-mock":
+                self.engine.generate_test_data_for_run(run_id)
+
             # Persist prompt metadata (topic/persona/priority) so the
             # by-topic metrics breakdown below can join against it.
             self.store.save_prompts(prompts)
