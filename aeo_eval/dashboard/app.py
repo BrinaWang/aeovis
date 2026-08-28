@@ -1,5 +1,8 @@
 """Streamlit dashboard for AEO Visibility Platform."""
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import sqlite3
 import json
 from pathlib import Path
