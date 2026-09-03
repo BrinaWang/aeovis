@@ -40,6 +40,7 @@ from aeo_eval.data.prompt_loader import load_prompts
 from aeo_eval.engine.factory import available_engines, create_engine
 from aeo_eval.runner.evaluator import RunOptions
 from aeo_eval.orchestrator import AEOPipelineOrchestrator
+from aeo_eval.website_accessibility import WebsiteAccessibilityChecker
 
 def _db_path() -> str:
     """Resolve the DB path at call time so config changes are honored."""
@@ -325,6 +326,89 @@ def fetch_website_checks_by_crawler(run_id):
     results = cursor.fetchall()
     conn.close()
     return results
+
+
+def fetch_all_module6_checks():
+    """Fetch all website checks from all runs, ordered by timestamp descending."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT wc.*, er.timestamp as run_timestamp
+        FROM website_checks wc
+        LEFT JOIN evaluation_runs er ON wc.run_id = er.run_id
+        ORDER BY wc.check_timestamp DESC
+        LIMIT 500
+    """)
+    checks = cursor.fetchall()
+    conn.close()
+    return checks
+
+
+def fetch_module6_run_history():
+    """Fetch distinct Module 6 runs (runs that have website checks)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DISTINCT wc.run_id, MAX(wc.check_timestamp) as last_check, COUNT(*) as num_checks
+        FROM website_checks wc
+        GROUP BY wc.run_id
+        ORDER BY MAX(wc.check_timestamp) DESC
+        LIMIT 50
+    """)
+    runs = cursor.fetchall()
+    conn.close()
+    return runs
+
+
+def run_module6_standalone(pages: list, crawlers: list) -> dict:
+    """Run Module 6 checks independently and store results."""
+    try:
+        import logging
+        import uuid
+        from aeo_eval.storage.sqlite_store import SQLiteStore
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"Starting standalone Module 6 run on {len(pages)} pages for {len(crawlers)} crawlers")
+
+        # Create a synthetic run ID for this Module 6-only run
+        run_id = f"module6-{uuid.uuid4().hex[:12]}"
+
+        # Initialize database
+        store = SQLiteStore(_db_path())
+        store.init_db()
+
+        # Create checker and run checks
+        checker = WebsiteAccessibilityChecker()
+        checks = checker.check_pages(pages, crawlers)
+
+        # Add run_id to each check
+        for check in checks:
+            check['run_id'] = run_id
+
+        # Store results
+        if checks:
+            store.store_website_checks(checks)
+            logger.info(f"Stored {len(checks)} website accessibility checks for run {run_id}")
+            return {
+                "success": True,
+                "run_id": run_id,
+                "num_checks": len(checks),
+                "pages_checked": len(pages),
+                "crawlers_checked": len(crawlers)
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No checks generated"
+            }
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Module 6 standalone run failed: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 def fetch_crawler_logs_summary(run_id):
@@ -1267,6 +1351,144 @@ def render_recommendations_view(run):
                         st.caption(f"**Review Notes:** {rec['review_notes']}")
 
 
+def render_module6_checks_view():
+    """Render the Module 6 (Website Accessibility) checks independent view."""
+    st.subheader("Website and Crawler Accessibility Checks")
+
+    st.markdown("""
+    Module 6 checks whether important Striim pages are accessible to AI crawlers,
+    including robots.txt rules, HTTP status, extractability, and llms.txt coverage.
+    Run checks independently or review historical results.
+    """)
+
+    # Control section
+    with st.expander("Run New Module 6 Check", expanded=False):
+        st.markdown("##### Configuration")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Pages to Check**")
+            pages_default = config.evaluation.important_striim_pages
+            pages_input = st.text_area(
+                "Enter URLs (one per line):",
+                value="\n".join(pages_default),
+                height=100,
+                key="module6_pages"
+            )
+            pages = [p.strip() for p in pages_input.strip().split("\n") if p.strip()]
+
+        with col2:
+            st.markdown("**Crawlers to Simulate**")
+            crawlers_default = config.evaluation.crawlers
+            crawlers_input = st.text_area(
+                "Enter crawler user-agents (one per line):",
+                value="\n".join(crawlers_default),
+                height=100,
+                key="module6_crawlers"
+            )
+            crawlers = [c.strip() for c in crawlers_input.strip().split("\n") if c.strip()]
+
+        if st.button("Run Module 6 Checks", type="primary", use_container_width=True):
+            with st.spinner(f"Running checks on {len(pages)} pages for {len(crawlers)} crawlers..."):
+                result = run_module6_standalone(pages, crawlers)
+
+                if result["success"]:
+                    st.success(
+                        f"✓ Module 6 complete! Run ID: {result['run_id'][-12:]} | "
+                        f"{result['num_checks']} checks stored"
+                    )
+                    st.rerun()
+                else:
+                    st.error(f"Module 6 failed: {result.get('error', 'Unknown error')}")
+
+    st.divider()
+
+    # Results section
+    st.markdown("#### Recent Results")
+
+    # Get all checks
+    all_checks = fetch_all_module6_checks()
+
+    if all_checks:
+        # Summary metrics
+        col1, col2, col3, col4 = st.columns(4)
+
+        publicly_accessible = sum(1 for c in all_checks if c['result'] == 'publicly_accessible')
+        blocked_error = sum(1 for c in all_checks if c['result'] in ('blocked_by_robots', 'http_error_4xx', 'http_error_5xx'))
+        poorly_extractable = sum(1 for c in all_checks if c['result'] == 'poorly_extractable')
+
+        with col1:
+            st.metric("Publicly Accessible", publicly_accessible)
+        with col2:
+            st.metric("Blocked/Error", blocked_error)
+        with col3:
+            st.metric("Poorly Extractable", poorly_extractable)
+        with col4:
+            st.metric("Total Checks", len(all_checks))
+
+        st.divider()
+
+        # Results table
+        st.markdown("#### Check Details")
+
+        df_checks = pd.DataFrame([
+            {
+                'URL': c['striim_url'],
+                'Crawler': c['crawler'],
+                'HTTP Status': c['http_status'] or 'N/A',
+                'Robots': 'Allowed' if c['robots_allowed'] else ('Blocked' if c['robots_allowed'] is not None else 'Unknown'),
+                'Noindex': 'Yes' if c['noindex'] else 'No',
+                'Result': c['result'] or 'Unknown',
+                'Check Time': datetime.fromisoformat(c['check_timestamp']).strftime('%Y-%m-%d %H:%M') if c['check_timestamp'] else 'N/A'
+            }
+            for c in all_checks
+        ])
+
+        st.dataframe(df_checks, use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        # Results by crawler
+        st.markdown("#### Results by Crawler")
+
+        crawler_results = {}
+        for check in all_checks:
+            crawler = check['crawler']
+            result = check['result'] or 'unknown'
+            if crawler not in crawler_results:
+                crawler_results[crawler] = {}
+            crawler_results[crawler][result] = crawler_results[crawler].get(result, 0) + 1
+
+        df_crawlers = pd.DataFrame([
+            {
+                'Crawler': crawler,
+                'Result': result,
+                'Count': count
+            }
+            for crawler, results in crawler_results.items()
+            for result, count in results.items()
+        ])
+
+        if not df_crawlers.empty:
+            fig = px.bar(
+                df_crawlers,
+                x='Crawler',
+                y='Count',
+                color='Result',
+                barmode='group',
+                labels={'Count': 'Number of Checks', 'Crawler': 'Crawler Type'}
+            )
+            fig.update_layout(
+                height=400,
+                margin=dict(l=0, r=0, t=0, b=0),
+                template='plotly_white'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No Module 6 checks found. Run checks to see results.")
+
+
 def main():
     """Main Streamlit app."""
     st.set_page_config(
@@ -1276,6 +1498,30 @@ def main():
         initial_sidebar_state="expanded"
     )
 
+    # Initialize view mode in session state
+    if "view_mode" not in st.session_state:
+        st.session_state.view_mode = "Dashboard"
+
+    # View mode selector at the top
+    col1, col2, col3 = st.columns([1, 6, 1])
+    with col2:
+        view_mode = st.segmented_control(
+            "View",
+            ["Dashboard", "Module 6 Checks"],
+            selection_mode="single",
+            key="view_mode_control"
+        )
+        if view_mode:
+            st.session_state.view_mode = view_mode
+
+    st.divider()
+
+    # Module 6 Checks view
+    if st.session_state.view_mode == "Module 6 Checks":
+        render_module6_checks_view()
+        return
+
+    # Dashboard view (original)
     st.title("AEO Visibility Dashboard")
 
     # Sidebar: Run new evaluation and selection
