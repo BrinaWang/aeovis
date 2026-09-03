@@ -1440,7 +1440,7 @@ def render_module6_checks_view():
                 'Robots': 'Allowed' if c['robots_allowed'] else ('Blocked' if c['robots_allowed'] is not None else 'Unknown'),
                 'Noindex': 'Yes' if c['noindex'] else 'No',
                 'Result': c['result'] or 'Unknown',
-                'Check Time': datetime.fromisoformat(c['check_timestamp']).strftime('%Y-%m-%d %H:%M') if c['check_timestamp'] else 'N/A'
+                'Check Time': datetime.fromisoformat(c['check_timestamp'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M') if c['check_timestamp'] else 'N/A'
             }
             for c in all_checks
         ])

@@ -97,7 +97,7 @@ class ClaudeEngine(BaseEngine):
                     messages=[
                         {
                             "role": "user",
-                            "content": prompt_text,
+                            "content": f"{prompt_text}\n\nPlease include relevant URLs and documentation links in your answer where applicable.",
                         }
                     ],
                     timeout=self.timeout,
