@@ -1,0 +1,53 @@
+AEO (Answer Engine Optimization): Concepts, Methodologies, and Evidence
+Concepts, Methodologies, Insights
+1. The Shift: SEO vs. AEO
+SEO typically focuses on ranking position on a results page, AEO focuses on being the passage a model extracts/cites in their answer. 
+Matching the question instead of the keyword. Content structured to directly answer a specific question typically outperforms content structured around a keyword phrase. 
+Retrieval is passage-level rather than page-level. Content should be independently understandable in small sections (because of retrieval systems/search-integrated LLMs). A paragraph or subsection should make sense without the surrounding context.
+Ranking and citation are not the same. Pages that are strong in rank are not necessarily cited more often. AEO and SEO are different methods and should be treated as such. 
+2. Page Organization
+Answer first. Before any context or history, the answer to a question should be in the first 1-3 sentences of a section. (Models disproportionately use content that appears first under a heading.)
+Question phrased headings. Headings should be similar to what a person would ask an answer engine, not a stylized or clever title.
+I think it’s important to strike a balance between what is professional/appeals to clients and what is optimized for AEO. Blog posts are a good way to keep things separate. 
+Content chunking. Separate content into self-contained sections, covering only one subtopic, instead of one long paragraph. 
+Specificity. Concrete figures are more likely to be cited than vague claims. (62% of X vs. many X) Numbers are worth posting and mentioning. 
+Minimizing structural overhead. One methodology favors plain HTML tables and a strict heading hierarchy because models tokenize raw text directly.
+E-E-A-T signal strengthening. (Experience, Expertise, Authoritativeness, and Trustworthiness) Visible author credentials, clear publication dates, and links to primary sources cited statistics are treated as important factors. Weak trust can hinder citation even if content ranks well.
+Recency. Pages that are posted and left alone are cited less than regularly updated pages. Pages should be revisited on a recurring basis. 
+Technical scaffolding. Maintaining llms.txt or sitemap.xml help AI crawlers parse a site's structure.
+llms.txt - brief background information, guidance, and links to detailed markdown files. Not commonly used, robots.txt more common
+sitemap.xml - lists important pages
+3. Opportunity vs. Age
+One system I saw used a quantitative approach to deciding which existing pages to fix first, built around three scoring dimensions compared against a prior 28-day window:
+Recover: clicks lost versus a previous period
+CTR gap: the difference between a page's actual and expected CTR (modeled from avg search position). Multiplying CTR gap by impression volume estimates recoverable clicks, which becomes the basis for prioritizing title or description rewrite. 
+EX: a page with 329,454 impressions at average position 9.4 but only 857 clicks (0.26% actual CTR against a ~2.5% expected CTR) = ~ 7,380 recoverable clicks.
+Rank push: the estimated click gain from moving a page-two post to page one, used to justify a content-depth investment rather than a metadata tweak.
+Guardrails: 
+Low impression pages are excluded from receiving fixes regardless of CTR gap, since no edit corrects for the absence of underlying search demand.
+Posts with a noticeable drop in absolute clicks are prioritized regardless of where they rank in the opportunity queue.
+4. Off-Site Methods
+On-page optimization only affects extractability (whether AI can easily pull an answer from a page it already trusts) not citability (whether the AI treats the domain as a legitimate source). Trust comes from:
+Third-party mention acquisition. Getting named in ‘best X’ lists, comparison articles, social media posts or discussions, YouTube content, and review platforms like G2 movesAEO visibility faster than on-site content. 
+Reddit is a notable share of Google AI Overview citations.
+Paid placement on cited sources. One system identified the second most-cited domain in a target industry via citation-source analysis, paid the site to publish sponsored articles and include the brand in its listicles. It increased mentions from zero eight across 200 prompts in two weeks.
+Entity consistency. Maintaining an identical description of ‘what the business is and does’ across every platform it appears on can be used to reduce noise. Some methods use organization schema to make brand identity unambiguous to AI systems.
+Avoiding self-serving listicles. Publishing ‘Best X’ content on your domain and ranking yourself #1 is typically devalued by Google, and can inadvertently promote named competitors.
+Content distribution. One method pairs on-page optimization with repurposing source content into platform-native versions (LinkedIn, Instagram, YouTube). The reasoning is that it reinforces authority signals AI systems use for cross-referencing.
+5. Measuring Efficacy
+This is the least mature part of the discipline, w/ several concerns:
+Stages. Instead of tracking a single visibility metric, track 3 stages: 
+AI crawler accessibility (does a crawler access the page)
+Citability (is the page cited in generated answers)
+Follow through(do people click the citation)
+Site-wide baseline movement. Comparing only one page's before/after numbers is insufficient, because the entire site can shift due to unrelated factors. Capture site-wide performance numbers over the same before/after date range, so a page's gain can be assessed against the control.
+Variance in AI queries. Identical prompts produce different citation results run-to-run. Thus a single before/after measurement is insufficient. Instead use a repeated prompt panel measured consistently, so that a citation shift can be found in a specific week's changes.
+Query failures. Some answer engines (Perplexity) silently reject a notable amount of automated measurement queries. Part of a before/after visibility gap may be due to measurement failure instead of actual change, if a tracking tool doesn’t report its own error rate.
+Attribution difficulty. The causal effect of one single tactic is hard to measure. Most changes are due to several concurrent tactics.
+Leading vs. lagging indicators. Tracking AI crawler bot traffic can be an earlier signal of more engagement, as citation and traffic gains can lag by weeks or months.
+6. Visibility Targets
+A target like ‘3x AI visibility’ is not useful until the underlying metric is defined. If ‘visibility’ means:
+AI Overview appearances trackable in Search Console: a 3x increase on a small site in a few months is generally considered achievable
+Citation frequency across answer engines: harder to track cleanly and has a less predictable timeline
+Tripling from a near-zero baseline is easier than tripling an existing presence. Tripling AI-specific traffic or citations is generally easier than tripling total site traffic via AEO 
+The consistent recommendation is to pin down the exact metric and its measurement method before committing to a numeric target.

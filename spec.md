@@ -621,7 +621,6 @@ Whether the page appeared in an AI answer
 Support one request-log format.
 
 The pipeline should:
-
 - Read new log records.
 - Parse provider-specific fields.
 - Normalize records.

@@ -2,9 +2,11 @@
 
 Wires together the answer-engine runner (Module 2), response analysis
 extraction (Module 3, integrated into the evaluator), visibility metrics
-(Module 4), citation deduplication (Module 5), gap detection (Module 8),
-and recommendation generation with auto-approval (Module 9) into a single
-top-level entry point.
+(Module 4), website accessibility checks (Module 6, optional),
+citation deduplication (Module 5), gap detection (Module 8), and
+recommendation generation with auto-approval (Module 9) into a single
+top-level entry point. Module 6 is completely separate from visibility
+metrics and only runs if enabled in config.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from aeo_eval.recommendations.approval import should_auto_approve
 from aeo_eval.recommendations.generator import RecommendationGenerator
 from aeo_eval.runner.evaluator import Evaluator, RunOptions
 from aeo_eval.storage.sqlite_store import SQLiteStore, resolve_sqlite_target
+from aeo_eval.website_accessibility import WebsiteAccessibilityChecker
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +34,11 @@ class AEOPipelineOrchestrator:
     """Orchestrate the full AEO evaluation pipeline.
 
     This is the top-level entry point for running prompts end-to-end:
-    answer engine -> analysis -> metrics -> citations -> gaps ->
-    recommendations -> auto-approval. Callers (e.g. the CLI) should use
-    this instead of driving ``Evaluator`` directly.
+    answer engine -> analysis -> metrics -> [website accessibility checks] ->
+    citations -> gaps -> recommendations -> auto-approval. Module 6
+    (website accessibility) is optional and controlled by config.
+    Callers (e.g. the CLI) should use this instead of driving ``Evaluator``
+    directly.
     """
 
     def __init__(self, engine: BaseEngine, config: Optional[dict] = None):
@@ -74,11 +79,15 @@ class AEOPipelineOrchestrator:
         Pipeline:
         1. Run prompts through answer engine
         2. Extract analysis (brands, claims, sentiment) - via evaluator
-        3. Calculate visibility metrics
-        4. Deduplicate and classify citations
-        5. Detect gaps
-        6. Generate recommendations
-        7. Auto-approve high-confidence recommendations
+        3. Calculate visibility metrics (Module 4)
+        4. Website accessibility checks (Module 6) - optional, if enabled in config
+        5. Deduplicate and classify citations (Module 5)
+        6. Detect gaps (Module 8)
+        7. Generate recommendations (Module 9)
+        8. Auto-approve high-confidence recommendations
+
+        Module 6 is completely separate from visibility metrics and only runs
+        if run_website_accessibility_checks is enabled in config.evaluation.
 
         Args:
             prompts: List of Prompt objects to evaluate
@@ -135,6 +144,32 @@ class AEOPipelineOrchestrator:
                 f"Metrics calculated and stored (overall + {len(topic_metrics)} topic breakdowns)"
             )
 
+            # Step 2.5: Website Accessibility Checks (Module 6) - optional
+            if app_config.evaluation.run_website_accessibility_checks:
+                try:
+                    checker = WebsiteAccessibilityChecker()
+                    important_pages = app_config.evaluation.important_striim_pages
+                    crawlers = app_config.evaluation.crawlers
+
+                    logger.info(
+                        f"Running Module 6: Website Accessibility checks on {len(important_pages)} pages for {len(crawlers)} crawlers"
+                    )
+
+                    checks = checker.check_pages(important_pages, crawlers)
+
+                    for check in checks:
+                        check['run_id'] = run_id
+
+                    if checks:
+                        self.store.store_website_checks(checks)
+                        logger.info(f"Stored {len(checks)} website accessibility checks")
+                    else:
+                        logger.warning("No website checks generated")
+                except Exception as e:
+                    logger.error(f"Module 6 (Website Accessibility) failed: {e}", exc_info=True)
+            else:
+                logger.info("Module 6 (Website Accessibility) skipped (disabled in config)")
+
             # Step 3: Citations (Module 5)
             deduplicator = CitationDeduplicator(conn)
             citations = deduplicator.process_citations_from_run(run_id)
@@ -150,7 +185,19 @@ class AEOPipelineOrchestrator:
             logger.info(f"Detected {len(gaps)} gaps")
 
             # Step 5: Recommendations (Module 9)
-            generator = RecommendationGenerator(conn)
+            # Use ClaudeEngine for LLM-based recommendations if available
+            recommendation_engine = None
+            if self.engine.name == "claude":
+                recommendation_engine = self.engine
+            else:
+                # For non-Claude engines, try to create a Claude engine for recommendations
+                try:
+                    from aeo_eval.engine.claude_engine import ClaudeEngine
+                    recommendation_engine = ClaudeEngine(self.config)
+                except Exception as e:
+                    logger.info(f"Could not initialize ClaudeEngine for recommendations: {e}")
+
+            generator = RecommendationGenerator(conn, engine=recommendation_engine)
             recommendations = generator.generate_for_run(run_id)
 
             num_auto_approved = 0

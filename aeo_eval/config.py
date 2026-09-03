@@ -72,6 +72,10 @@ class EvaluationConfig(BaseModel):
     )
     enabled_topics: Optional[List[str]] = Field(default=None, description="Filter to specific topics (optional)")
     enabled_personas: Optional[List[str]] = Field(default=None, description="Filter to specific personas (optional)")
+    run_website_accessibility_checks: bool = Field(
+        default=False,
+        description="Enable Module 6 (Website and Crawler Accessibility checks) - runs after metrics"
+    )
 
 
 class SchedulingConfig(BaseModel):

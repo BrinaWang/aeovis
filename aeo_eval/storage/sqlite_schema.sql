@@ -218,6 +218,20 @@ CREATE TABLE IF NOT EXISTS data_retention_policy (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Module 9: Method sections with embeddings for RAG
+CREATE TABLE IF NOT EXISTS method_sections (
+    id TEXT PRIMARY KEY,
+    topic TEXT NOT NULL,
+    section_title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    embedding BLOB,           -- Serialized float32 vector (1536 dimensions for Claude embeddings)
+    embedding_model TEXT,     -- "claude" or other model name
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_method_sections_topic ON method_sections(topic);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_method_sections_topic_title ON method_sections(topic, section_title);
+
 INSERT OR IGNORE INTO data_retention_policy (table_name, retention_days) VALUES
     ('raw_responses', 365),
     ('response_analysis', 365),
@@ -226,4 +240,5 @@ INSERT OR IGNORE INTO data_retention_policy (table_name, retention_days) VALUES
     ('crawler_logs', 90),
     ('visibility_metrics', NULL),
     ('gaps', NULL),
-    ('recommendations', NULL);
+    ('recommendations', NULL),
+    ('method_sections', NULL);
