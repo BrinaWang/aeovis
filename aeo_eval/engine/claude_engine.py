@@ -94,10 +94,11 @@ class ClaudeEngine(BaseEngine):
                 return self.client.messages.create(
                     model=self.model_name,
                     max_tokens=2000,
+                    system="You are a knowledgeable expert. When answering questions, always include relevant URLs, documentation links, and sources where applicable to support your answer.",
                     messages=[
                         {
                             "role": "user",
-                            "content": f"{prompt_text}\n\nPlease include relevant URLs and documentation links in your answer where applicable.",
+                            "content": prompt_text,
                         }
                     ],
                     timeout=self.timeout,
