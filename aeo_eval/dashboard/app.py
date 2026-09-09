@@ -489,7 +489,7 @@ def format_metric_card(label, value, change=None, subtext=None):
 
 def render_visibility_metrics_view(run):
     """Render the Visibility Metrics view."""
-    st.subheader("Visibility Metrics")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>📈 Visibility Metrics</h2>", unsafe_allow_html=True)
 
     # Display run cost and metadata at top
     col1, col2, col3, col4 = st.columns(4)
@@ -652,7 +652,7 @@ def render_visibility_metrics_view(run):
 
 def render_gaps_recommendations_view(run):
     """Render the Gaps & Recommendations view."""
-    st.subheader("Gaps & Recommendations")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>🎯 Gaps & Recommendations</h2>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -755,7 +755,7 @@ def render_gaps_recommendations_view(run):
 
 def render_comparison_view(all_runs):
     """Render the Run Comparison view."""
-    st.subheader("Run Comparison")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>📊 Run Comparison</h2>", unsafe_allow_html=True)
 
     # Get metrics for all runs
     all_metrics = []
@@ -863,7 +863,7 @@ def render_comparison_view(all_runs):
 
 def render_citation_analysis_view(run):
     """Render the Citation Analysis view."""
-    st.subheader("Citation Analysis")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>🔗 Citation Analysis</h2>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -930,7 +930,7 @@ def render_citation_analysis_view(run):
 
 def render_request_logs_view(run):
     """Render the Request Logs view."""
-    st.subheader("Request Logs")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>📝 Request Logs</h2>", unsafe_allow_html=True)
 
     # Fetch logs data
     summary = fetch_crawler_logs_summary(run['run_id'])
@@ -1022,7 +1022,7 @@ def render_request_logs_view(run):
 
 def render_website_access_view(run):
     """Render the Website Access view."""
-    st.subheader("Website Access")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>🌐 Website Access</h2>", unsafe_allow_html=True)
 
     checks = fetch_website_checks_for_run(run['run_id'])
 
@@ -1124,7 +1124,7 @@ def render_website_access_view(run):
 
 def render_recommendations_view(run):
     """Render the Recommendations management view."""
-    st.subheader("Recommendations")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>✅ Recommendations</h2>", unsafe_allow_html=True)
 
     # Status filter
     col1, col2 = st.columns([2, 4])
@@ -1354,7 +1354,7 @@ def render_recommendations_view(run):
 
 def render_cost_view():
     """Render the Cost Analysis view."""
-    st.subheader("Cost Analysis")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>💰 Cost Analysis</h2>", unsafe_allow_html=True)
 
     st.markdown("""
     Track and analyze evaluation costs across runs and engines.
@@ -1557,7 +1557,7 @@ def render_cost_view():
 
 def render_module6_checks_view():
     """Render the Module 6 (Website Accessibility) checks independent view."""
-    st.subheader("Website and Crawler Accessibility Checks")
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>🔍 Website and Crawler Accessibility Checks</h2>", unsafe_allow_html=True)
 
     st.markdown("""
     Module 6 checks whether important Striim pages are accessible to AI crawlers,
@@ -1697,17 +1697,223 @@ def main():
     """Main Streamlit app."""
     st.set_page_config(
         page_title="AEO Visibility Dashboard",
-        page_icon="AEO",
+        page_icon="🔍",
         layout="wide",
         initial_sidebar_state="expanded"
     )
+
+    # Custom CSS for visual polish
+    st.markdown("""
+    <style>
+    /* Background and base colors */
+    :root {
+        --primary: #1e40af;
+        --success: #059669;
+        --warning: #d97706;
+        --alert: #dc2626;
+        --bg-base: #f8fafc;
+        --bg-secondary: #f1f5f9;
+        --text-primary: #0f172a;
+        --text-secondary: #475569;
+        --border: #e2e8f0;
+        --shadow-sm: rgba(15, 23, 42, 0.05);
+        --shadow-md: rgba(15, 23, 42, 0.08);
+    }
+
+    /* Main background */
+    .stMainBlockContainer {
+        background: linear-gradient(135deg, var(--bg-base) 0%, var(--bg-secondary) 100%);
+    }
+
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, var(--bg-base) 0%, var(--bg-secondary) 100%);
+    }
+
+    /* Dividers */
+    hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 1.5rem 0;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 500;
+        border: 1px solid var(--border);
+        transition: all 0.2s ease;
+    }
+
+    .stButton > button:hover {
+        box-shadow: 0 4px 12px var(--shadow-md);
+    }
+
+    /* Tabs styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+    }
+
+    .stTabs [role="tab"] {
+        border-radius: 8px;
+        padding: 0.75rem 1.5rem !important;
+        font-weight: 500;
+        border: 1px solid transparent;
+    }
+
+    .stTabs [role="tab"][aria-selected="true"] {
+        background: var(--primary);
+        color: white;
+        box-shadow: 0 2px 8px rgba(30, 64, 175, 0.2);
+    }
+
+    .stTabs [role="tab"][aria-selected="false"] {
+        background: white;
+        border-color: var(--border);
+        color: var(--text-secondary);
+    }
+
+    /* Metric cards */
+    [data-testid="stMetric"] {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        box-shadow: 0 1px 3px var(--shadow-sm);
+    }
+
+    /* Container styling */
+    [data-testid="stVerticalBlockBorderContainer"] {
+        background: white;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        box-shadow: 0 1px 3px var(--shadow-sm);
+        padding: 1.5rem;
+    }
+
+    /* Expander styling */
+    .streamlit-expander {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 1px 3px var(--shadow-sm);
+    }
+
+    /* Dataframe styling */
+    .stDataFrame {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px var(--shadow-sm);
+    }
+
+    /* Info/Warning/Error messages */
+    .stAlert {
+        border-radius: 8px;
+        border: 1px solid;
+    }
+
+    .stSuccess {
+        background: #f0fdf4;
+        border-color: var(--success);
+        color: #166534;
+    }
+
+    .stInfo {
+        background: #eff6ff;
+        border-color: var(--primary);
+        color: #0c2340;
+    }
+
+    .stWarning {
+        background: #fffbeb;
+        border-color: var(--warning);
+        color: #92400e;
+    }
+
+    .stError {
+        background: #fef2f2;
+        border-color: var(--alert);
+        color: #7f1d1d;
+    }
+
+    /* Text styling */
+    h1, h2, h3 {
+        color: var(--text-primary);
+    }
+
+    h1 {
+        font-weight: 700;
+        letter-spacing: -0.5px;
+    }
+
+    h2 {
+        font-weight: 600;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    p, body {
+        color: var(--text-secondary);
+        line-height: 1.6;
+    }
+
+    /* Selectbox and input styling */
+    .stSelectbox, .stSlider, .stTextInput, .stTextArea {
+        border-radius: 8px;
+    }
+
+    [data-baseweb="select"] {
+        border-radius: 8px !important;
+    }
+
+    /* Radio button styling */
+    .stRadio > label {
+        font-weight: 500;
+    }
+
+    /* Navigation bar for view mode - custom styling */
+    .nav-pills {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+        padding: 1rem 0;
+        margin-bottom: 0.5rem;
+    }
+
+    .nav-pill {
+        padding: 0.75rem 1.5rem;
+        border-radius: 25px;
+        border: 2px solid var(--border);
+        background: white;
+        color: var(--text-secondary);
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.95rem;
+    }
+
+    .nav-pill:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .nav-pill.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+        box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # Initialize view mode in session state
     if "view_mode" not in st.session_state:
         st.session_state.view_mode = "Dashboard"
 
-    # View mode selector at the top
-    col1, col2, col3 = st.columns([1, 6, 1])
+    # Enhanced view mode selector with better visual design
+    st.markdown("<div style='text-align: center; margin-bottom: 1rem;'><h3 style='margin: 0; color: #0f172a;'>AEO Visibility Platform</h3></div>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         view_mode = st.segmented_control(
             "View",
@@ -1735,10 +1941,10 @@ def main():
 
     # Sidebar: Run new evaluation and selection
     with st.sidebar:
-        st.header("Evaluation Control")
+        st.markdown("<h2 style='color: #1e40af; margin-top: 0; font-size: 1.25rem;'>⚙️ Evaluation Control</h2>", unsafe_allow_html=True)
 
         # Run new evaluation section
-        with st.expander("Run New Evaluation", expanded=False):
+        with st.expander("▶ Run New Evaluation", expanded=False):
             st.markdown("##### Engine Selection")
             engine_choice = st.radio(
                 "Choose engine:",
@@ -1789,7 +1995,7 @@ def main():
                         st.rerun()
 
         st.divider()
-        st.header("Run Selection")
+        st.markdown("<h2 style='color: #1e40af; font-size: 1.25rem; margin-bottom: 1rem;'>📊 Run Selection</h2>", unsafe_allow_html=True)
 
         # Fetch all runs
         all_runs = fetch_all_runs()
@@ -1878,7 +2084,10 @@ def main():
                     else:
                         st.error("Please check the confirmation box before deleting.")
 
-    # Run info header
+    # Run info header with improved styling
+    st.markdown("<hr style='border: none; border-top: 2px solid #e2e8f0; margin: 2rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #1e40af; margin: 1rem 0; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em;'>Current Run Details</h3>", unsafe_allow_html=True)
+
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Run ID", run['run_id'][-8:])
