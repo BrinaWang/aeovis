@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Literal, Optional
@@ -48,6 +50,8 @@ class CostTracker:
         self.limit = limit_dollars
         self.spent = 0.0
         self.prompt_costs: List[tuple[str, float]] = []
+        self._lock = threading.Lock()
+        self.limit_exceeded = False
 
     def add(self, prompt_id: str, cost: float) -> None:
         """
@@ -60,17 +64,20 @@ class CostTracker:
         Raises:
             CostLimitExceeded if total cost exceeds limit
         """
-        self.spent += cost
-        self.prompt_costs.append((prompt_id, cost))
+        with self._lock:
+            self.spent += cost
+            self.prompt_costs.append((prompt_id, cost))
 
-        if self.spent > self.limit:
-            raise CostLimitExceeded(
-                f"Cost limit exceeded: ${self.spent:.2f} > ${self.limit:.2f}"
-            )
+            if self.spent > self.limit:
+                self.limit_exceeded = True
+                raise CostLimitExceeded(
+                    f"Cost limit exceeded: ${self.spent:.2f} > ${self.limit:.2f}"
+                )
 
     def remaining(self) -> float:
         """Get remaining budget in dollars."""
-        return max(0.0, self.limit - self.spent)
+        with self._lock:
+            return max(0.0, self.limit - self.spent)
 
     def summary(self) -> str:
         """Get human-readable cost summary."""
@@ -322,53 +329,77 @@ class Evaluator:
         if options.dry_run:
             logger.info("DRY RUN: Would cost ${total_estimated_cost:.2f} (no API calls made)")
 
-        # Run all prompts
+        # Run all prompts concurrently with max 4 workers
         results: List[RunResult] = []
         succeeded = 0
         failed = 0
         total_input_tokens = 0
         total_output_tokens = 0
 
-        for prompt in prompts_list:
-            try:
-                result = self.run_one(prompt, options)
-                results.append(result)
+        max_workers = min(4, len(prompts_list))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self.run_one, prompt, options): prompt
+                for prompt in prompts_list
+            }
 
-                if result.status == "success":
-                    succeeded += 1
-                    if result.input_tokens is not None:
-                        total_input_tokens += result.input_tokens
-                    if result.output_tokens is not None:
-                        total_output_tokens += result.output_tokens
-                else:
+            for future in as_completed(futures):
+                # Stop submitting new work if cost limit is reached
+                if self.cost_tracker.limit_exceeded:
+                    executor.shutdown(wait=False)
+                    break
+
+                prompt = futures[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+
+                    if result.status == "success":
+                        succeeded += 1
+                        if result.input_tokens is not None:
+                            total_input_tokens += result.input_tokens
+                        if result.output_tokens is not None:
+                            total_output_tokens += result.output_tokens
+                    else:
+                        failed += 1
+
+                except CostLimitExceeded as e:
+                    logger.warning(f"Cost limit reached: {e}")
+                    cost_limit_result = RunResult(
+                        run_id=f"cost-limit-{uuid.uuid4().hex[:12]}",
+                        run_batch_id=self.run_batch_id,
+                        prompt_id=prompt.id,
+                        engine=self.engine.name,
+                        model=self.engine.model_name,
+                        status="cost_limit_exceeded",
+                        response_text=None,
+                        error=str(e),
+                        latency_ms=None,
+                        engine_name=self.engine.__class__.__name__,
+                        run_timestamp=self.run_timestamp,
+                        run_type=options.run_type,
+                    )
+                    results.append(cost_limit_result)
                     failed += 1
 
-            except CostLimitExceeded as e:
-                logger.warning(f"Cost limit reached: {e}")
-                # Add a synthetic result for batch bookkeeping only. If the
-                # limit tripped on this prompt's own cost (rather than the
-                # analysis spend that follows a successful run), run_one has
-                # already persisted the real result for it — do not also
-                # persist this one, or the prompt is double-counted in
-                # raw_responses.
-                cost_limit_result = RunResult(
-                    run_id=f"cost-limit-{uuid.uuid4().hex[:12]}",
-                    run_batch_id=self.run_batch_id,
-                    prompt_id=prompt.id,
-                    engine=self.engine.name,
-                    model=self.engine.model_name,
-                    status="cost_limit_exceeded",
-                    response_text=None,
-                    error=str(e),
-                    latency_ms=None,
-                    engine_name=self.engine.__class__.__name__,
-                    run_timestamp=self.run_timestamp,
-                    run_type=options.run_type,
-                )
-                results.append(cost_limit_result)
-                failed += 1
-                # Stop running further prompts
-                break
+                except Exception as e:
+                    logger.error(f"Error in concurrent execution: {type(e).__name__}: {e}")
+                    failed_result = RunResult(
+                        run_id=f"error-{uuid.uuid4().hex[:12]}",
+                        run_batch_id=self.run_batch_id,
+                        prompt_id=prompt.id,
+                        engine=self.engine.name,
+                        model=self.engine.model_name,
+                        status="failed",
+                        response_text=None,
+                        error=str(e),
+                        latency_ms=None,
+                        engine_name=self.engine.__class__.__name__,
+                        run_timestamp=self.run_timestamp,
+                        run_type=options.run_type,
+                    )
+                    results.append(failed_result)
+                    failed += 1
 
         # Create summary
         evaluation_run = EvaluationRun(
