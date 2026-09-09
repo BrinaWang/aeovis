@@ -489,7 +489,7 @@ def format_metric_card(label, value, change=None, subtext=None):
 
 def render_visibility_metrics_view(run):
     """Render the Visibility Metrics view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>📈 Visibility Metrics</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Visibility Metrics</h2>", unsafe_allow_html=True)
 
     # Display run cost and metadata at top
     col1, col2, col3, col4 = st.columns(4)
@@ -652,7 +652,7 @@ def render_visibility_metrics_view(run):
 
 def render_gaps_recommendations_view(run):
     """Render the Gaps & Recommendations view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>🎯 Gaps & Recommendations</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Gaps & Recommendations</h2>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -755,7 +755,7 @@ def render_gaps_recommendations_view(run):
 
 def render_comparison_view(all_runs):
     """Render the Run Comparison view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>📊 Run Comparison</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Run Comparison</h2>", unsafe_allow_html=True)
 
     # Get metrics for all runs
     all_metrics = []
@@ -863,7 +863,7 @@ def render_comparison_view(all_runs):
 
 def render_citation_analysis_view(run):
     """Render the Citation Analysis view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>🔗 Citation Analysis</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Citation Analysis</h2>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -930,7 +930,7 @@ def render_citation_analysis_view(run):
 
 def render_request_logs_view(run):
     """Render the Request Logs view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>📝 Request Logs</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Request Logs</h2>", unsafe_allow_html=True)
 
     # Fetch logs data
     summary = fetch_crawler_logs_summary(run['run_id'])
@@ -1022,7 +1022,7 @@ def render_request_logs_view(run):
 
 def render_website_access_view(run):
     """Render the Website Access view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>🌐 Website Access</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Website Access</h2>", unsafe_allow_html=True)
 
     checks = fetch_website_checks_for_run(run['run_id'])
 
@@ -1124,7 +1124,7 @@ def render_website_access_view(run):
 
 def render_recommendations_view(run):
     """Render the Recommendations management view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>✅ Recommendations</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Recommendations</h2>", unsafe_allow_html=True)
 
     # Status filter
     col1, col2 = st.columns([2, 4])
@@ -1354,7 +1354,7 @@ def render_recommendations_view(run):
 
 def render_cost_view():
     """Render the Cost Analysis view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>💰 Cost Analysis</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Cost Analysis</h2>", unsafe_allow_html=True)
 
     st.markdown("""
     Track and analyze evaluation costs across runs and engines.
@@ -1557,7 +1557,7 @@ def render_cost_view():
 
 def render_module6_checks_view():
     """Render the Module 6 (Website Accessibility) checks independent view."""
-    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>🔍 Website and Crawler Accessibility Checks</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color: #1e40af; margin-bottom: 1.5rem;'>Website and Crawler Accessibility Checks</h2>", unsafe_allow_html=True)
 
     st.markdown("""
     Module 6 checks whether important Striim pages are accessible to AI crawlers,
@@ -1697,7 +1697,7 @@ def main():
     """Main Streamlit app."""
     st.set_page_config(
         page_title="AEO Visibility Dashboard",
-        page_icon="🔍",
+        page_icon="AEO",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -1941,10 +1941,10 @@ def main():
 
     # Sidebar: Run new evaluation and selection
     with st.sidebar:
-        st.markdown("<h2 style='color: #1e40af; margin-top: 0; font-size: 1.25rem;'>⚙️ Evaluation Control</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: #1e40af; margin-top: 0; font-size: 1.25rem;'>Evaluation Control</h2>", unsafe_allow_html=True)
 
         # Run new evaluation section
-        with st.expander("▶ Run New Evaluation", expanded=False):
+        with st.expander("Run New Evaluation", expanded=False):
             st.markdown("##### Engine Selection")
             engine_choice = st.radio(
                 "Choose engine:",
@@ -1995,7 +1995,7 @@ def main():
                         st.rerun()
 
         st.divider()
-        st.markdown("<h2 style='color: #1e40af; font-size: 1.25rem; margin-bottom: 1rem;'>📊 Run Selection</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: #1e40af; font-size: 1.25rem; margin-bottom: 1rem;'>Run Selection</h2>", unsafe_allow_html=True)
 
         # Fetch all runs
         all_runs = fetch_all_runs()
