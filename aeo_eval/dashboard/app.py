@@ -1952,23 +1952,6 @@ def main():
         run = fetch_run_by_id(all_runs[selected_idx]['run_id'])
 
         st.divider()
-        st.subheader("All Runs")
-        st.dataframe(
-            pd.DataFrame([
-                {
-                    'Run ID': r['run_id'][-8:],
-                    'Timestamp': datetime.fromisoformat(r['timestamp']).strftime('%Y-%m-%d %H:%M'),
-                    'Engine': r['engine'],
-                    'Prompts': r['num_prompts'],
-                    'Cost': f"${r['cost']:.2f}"
-                }
-                for r in all_runs
-            ]),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.divider()
         with st.expander("Clear Runs", expanded=False):
             st.warning("This action cannot be undone!")
 
