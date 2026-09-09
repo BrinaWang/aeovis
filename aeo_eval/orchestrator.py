@@ -99,6 +99,17 @@ class AEOPipelineOrchestrator:
         """
         logger.info(f"Starting pipeline for {len(prompts)} prompts")
 
+        # Check daily cost limit
+        today_cost = self.store.get_today_cost()
+        daily_limit = app_config.general.cost_limit_per_day
+        if today_cost >= daily_limit:
+            from aeo_eval.runner.evaluator import CostLimitExceeded
+            raise CostLimitExceeded(
+                f"Daily cost limit reached: ${today_cost:.2f} / ${daily_limit:.2f}. "
+                f"No more evaluations allowed today."
+            )
+        logger.info(f"Daily spend so far: ${today_cost:.2f} / ${daily_limit:.2f}")
+
         # Hold one connection open for the entire pipeline. This is what
         # keeps a ":memory:" (shared-cache) database alive across the many
         # short-lived connections opened internally by the Evaluator/
@@ -198,7 +209,19 @@ class AEOPipelineOrchestrator:
                     logger.info(f"Could not initialize ClaudeEngine for recommendations: {e}")
 
             generator = RecommendationGenerator(conn, engine=recommendation_engine)
-            recommendations = generator.generate_for_run(run_id)
+            recommendations, recommendation_cost = generator.generate_for_run(run_id)
+
+            # Add recommendation costs to evaluation run total
+            if recommendation_cost > 0:
+                logger.info(f"Recommendation generation cost: ${recommendation_cost:.4f}")
+                cursor = conn.execute("SELECT cost FROM evaluation_runs WHERE run_id = ?", (run_id,))
+                current_cost = cursor.fetchone()[0] or 0.0
+                new_total_cost = current_cost + recommendation_cost
+                conn.execute(
+                    "UPDATE evaluation_runs SET cost = ? WHERE run_id = ?",
+                    (new_total_cost, run_id)
+                )
+                conn.commit()
 
             num_auto_approved = 0
             for rec in recommendations:

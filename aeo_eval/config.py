@@ -41,6 +41,7 @@ class ProviderConfig(BaseModel):
 class GeneralConfig(BaseModel):
     """General system configuration."""
     cost_limit_per_run: float = Field(default=35.0, gt=0, description="Maximum spend per evaluation run ($)")
+    cost_limit_per_day: float = Field(default=100.0, gt=0, description="Maximum spend per day ($)")
     question_json_path: Path = Field(default=PROJECT_ROOT / "question.json", description="Path to buyer questions")
     output_db_path: Path = Field(default=PROJECT_ROOT / "data" / "eval_runs.db", description="SQLite database path")
     log_level: str = Field(default="INFO", description="Logging level")

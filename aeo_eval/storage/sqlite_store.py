@@ -4,6 +4,7 @@ import sqlite3
 import logging
 from pathlib import Path
 from typing import Iterable, List, Dict, Optional
+from datetime import datetime, timedelta
 import json
 
 from aeo_eval.models.result import RunResult, EvaluationRun
@@ -994,3 +995,182 @@ class SQLiteStore:
                 conn.rollback()
                 logger.error(f"Error storing crawler logs: {e}")
                 raise
+
+    def get_total_cost_and_run_count(self) -> Dict:
+        """Get total cost across all runs and number of runs."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) as num_runs, SUM(cost) as total_cost
+                FROM evaluation_runs
+            """)
+            row = cursor.fetchone()
+            return {
+                'num_runs': row[0] or 0,
+                'total_cost': row[1] or 0.0
+            }
+
+    def get_cost_by_engine(self) -> List[Dict]:
+        """Get total cost breakdown by engine."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT engine, COUNT(*) as num_runs, SUM(cost) as total_cost,
+                       AVG(cost) as avg_cost, MIN(cost) as min_cost, MAX(cost) as max_cost
+                FROM evaluation_runs
+                GROUP BY engine
+                ORDER BY total_cost DESC
+            """)
+            rows = cursor.fetchall()
+            return [
+                {
+                    'engine': row[0],
+                    'num_runs': row[1],
+                    'total_cost': row[2] or 0.0,
+                    'avg_cost': row[3] or 0.0,
+                    'min_cost': row[4] or 0.0,
+                    'max_cost': row[5] or 0.0
+                }
+                for row in rows
+            ]
+
+    def get_cost_by_topic(self) -> List[Dict]:
+        """Get total cost breakdown by topic, including run-level analysis costs.
+
+        Allocates run-level costs (which include analysis) proportionally to each topic
+        based on the number of prompts in that topic within each run.
+        """
+        with self._connect() as conn:
+            cursor = conn.cursor()
+
+            # Get all responses with their run and topic info
+            cursor.execute("""
+                SELECT rr.run_id, p.topic, rr.cost, COUNT(*) OVER (PARTITION BY rr.run_id) as prompts_per_run
+                FROM raw_responses rr
+                JOIN prompts p ON rr.prompt_id = p.id
+                JOIN evaluation_runs er ON rr.run_id = er.run_id
+                WHERE p.topic IS NOT NULL
+                ORDER BY rr.run_id, p.topic
+            """)
+            response_rows = cursor.fetchall()
+
+            # Get run-level totals for analysis cost allocation
+            cursor.execute("""
+                SELECT run_id, cost
+                FROM evaluation_runs
+            """)
+            run_costs = {row[0]: row[1] for row in cursor.fetchall()}
+
+            # Aggregate by topic
+            topic_data = {}
+            for run_id, topic, engine_cost, prompts_per_run in response_rows:
+                if topic not in topic_data:
+                    topic_data[topic] = {
+                        'runs': set(),
+                        'prompts': 0,
+                        'engine_cost': 0.0,
+                        'run_costs': []
+                    }
+
+                topic_data[topic]['runs'].add(run_id)
+                topic_data[topic]['prompts'] += 1
+                topic_data[topic]['engine_cost'] += engine_cost or 0.0
+                topic_data[topic]['run_costs'].append((run_id, prompts_per_run, run_costs.get(run_id, 0.0)))
+
+            # Calculate final totals with proportionally allocated analysis costs
+            results = []
+            for topic, data in topic_data.items():
+                total_analysis_cost = 0.0
+                seen_runs = set()
+
+                for run_id, prompts_per_run, run_total_cost in data['run_costs']:
+                    if run_id not in seen_runs:
+                        seen_runs.add(run_id)
+                        # Get sum of engine costs for this run
+                        cursor.execute(
+                            "SELECT SUM(cost) FROM raw_responses WHERE run_id = ?",
+                            (run_id,)
+                        )
+                        total_engine_cost_in_run = cursor.fetchone()[0] or 0.0
+                        # Analysis cost = total run cost - total engine cost
+                        analysis_cost_in_run = run_total_cost - total_engine_cost_in_run
+
+                        # Allocate proportionally by topic
+                        topic_proportion = data['prompts'] / prompts_per_run if prompts_per_run > 0 else 0
+                        total_analysis_cost += analysis_cost_in_run * topic_proportion
+
+                total_cost = data['engine_cost'] + total_analysis_cost
+                avg_cost = total_cost / data['prompts'] if data['prompts'] > 0 else 0.0
+
+                results.append({
+                    'topic': topic,
+                    'num_runs': len(data['runs']),
+                    'total_cost': total_cost,
+                    'avg_cost_per_prompt': avg_cost,
+                    'num_prompts': data['prompts']
+                })
+
+            results.sort(key=lambda x: x['total_cost'], reverse=True)
+            return results
+
+    def get_all_runs_cost_detail(self) -> List[Dict]:
+        """Get all runs with cost details for the cost table."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT run_id, timestamp, engine, model, num_prompts, cost, duration_seconds, status
+                FROM evaluation_runs
+                ORDER BY timestamp DESC
+            """)
+            rows = cursor.fetchall()
+            return [
+                {
+                    'run_id': row[0],
+                    'timestamp': row[1],
+                    'engine': row[2],
+                    'model': row[3],
+                    'num_prompts': row[4],
+                    'total_cost': row[5] or 0.0,
+                    'duration_seconds': row[6] or 0,
+                    'status': row[7],
+                    'cost_per_prompt': (row[5] or 0.0) / (row[4] or 1)
+                }
+                for row in rows
+            ]
+
+    def get_cost_trends(self, days: int = 90) -> List[Dict]:
+        """Get cost trends over time."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            since = (datetime.now() - timedelta(days=days)).isoformat()
+            cursor.execute("""
+                SELECT DATE(timestamp) as date, engine, COUNT(*) as num_runs,
+                       SUM(cost) as daily_cost, AVG(cost) as avg_cost
+                FROM evaluation_runs
+                WHERE timestamp >= ?
+                GROUP BY DATE(timestamp), engine
+                ORDER BY date
+            """, (since,))
+            rows = cursor.fetchall()
+            return [
+                {
+                    'date': row[0],
+                    'engine': row[1],
+                    'num_runs': row[2],
+                    'daily_cost': row[3] or 0.0,
+                    'avg_cost': row[4] or 0.0
+                }
+                for row in rows
+            ]
+
+    def get_today_cost(self) -> float:
+        """Get total cost spent today (since midnight UTC)."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            today = datetime.now().date().isoformat()
+            cursor.execute("""
+                SELECT SUM(cost) FROM evaluation_runs
+                WHERE DATE(timestamp) = ?
+            """, (today,))
+            result = cursor.fetchone()[0]
+            return result or 0.0

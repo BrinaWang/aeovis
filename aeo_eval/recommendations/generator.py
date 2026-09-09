@@ -147,6 +147,8 @@ Focus on actionable diagnoses that point to specific improvements."""
                 },
                 "required": ["diagnosis", "root_causes"]
             })
+            # Track cost in self for accumulation in generate_for_run
+            self._recommendation_cost = getattr(self, '_recommendation_cost', 0.0) + getattr(call, 'cost', 0.0)
             return call.data
         except Exception as e:
             logger.warning(f"LLM diagnosis failed: {e}")
@@ -201,6 +203,8 @@ Return JSON with:
 
         try:
             call = self.engine.run_with_structured_output(prompt, ARTICLE_RECOMMENDATION_SCHEMA)
+            # Track cost in self for accumulation in generate_for_run
+            self._recommendation_cost = getattr(self, '_recommendation_cost', 0.0) + getattr(call, 'cost', 0.0)
             return call.data
         except Exception as e:
             logger.warning(f"LLM article recommendation failed: {e}")
@@ -331,7 +335,7 @@ Return JSON with:
             "created_timestamp": datetime.now().isoformat(),
         }
 
-    def generate_for_run(self, run_id: str, use_llm: bool = True) -> list[Dict]:
+    def generate_for_run(self, run_id: str, use_llm: bool = True) -> tuple[list[Dict], float]:
         """
         Generate recommendations for all gaps in a run.
 
@@ -340,8 +344,11 @@ Return JSON with:
             use_llm: Whether to use LLM for deep gap analysis (default True if engine available)
 
         Returns:
-            List of recommendation dicts
+            Tuple of (List of recommendation dicts, total cost in dollars)
         """
+        # Initialize cost tracker
+        self._recommendation_cost = 0.0
+
         if not use_llm:
             self.engine = None
         cursor = self.conn.execute(
@@ -388,4 +395,4 @@ Return JSON with:
             rec = self.generate_for_gap(gap)
             recommendations.append(rec)
 
-        return recommendations
+        return recommendations, self._recommendation_cost

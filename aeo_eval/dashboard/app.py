@@ -28,6 +28,7 @@ except (ImportError, Exception):
 
 import sqlite3
 import json
+import yaml
 from pathlib import Path
 from datetime import datetime, timedelta
 import streamlit as st
@@ -35,7 +36,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 
-from aeo_eval.config import config
+from aeo_eval.config import config, PROJECT_ROOT
 from aeo_eval.data.prompt_loader import load_prompts
 from aeo_eval.engine.factory import available_engines, create_engine
 from aeo_eval.runner.evaluator import RunOptions
@@ -1351,6 +1352,209 @@ def render_recommendations_view(run):
                         st.caption(f"**Review Notes:** {rec['review_notes']}")
 
 
+def render_cost_view():
+    """Render the Cost Analysis view."""
+    st.subheader("Cost Analysis")
+
+    st.markdown("""
+    Track and analyze evaluation costs across runs and engines.
+    """)
+
+    # Settings section
+    with st.expander("Cost Limit Settings", expanded=False):
+        st.markdown("#### Adjust Token & Cost Limits")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Daily Cost Limit**")
+            daily_limit = st.number_input(
+                "Maximum spend per day ($)",
+                min_value=1.0,
+                max_value=10000.0,
+                value=float(config.general.cost_limit_per_day),
+                step=5.0,
+                help="Maximum total cost allowed per calendar day",
+                key="daily_cost_limit"
+            )
+
+        with col2:
+            st.markdown("**Cost Limit Per Run**")
+            run_limit = st.number_input(
+                "Maximum spend per run ($)",
+                min_value=1.0,
+                max_value=1000.0,
+                value=float(config.general.cost_limit_per_run),
+                step=1.0,
+                help="Maximum cost allowed for a single evaluation run",
+                key="run_cost_limit"
+            )
+
+        # Save button
+        if st.button("Save Limits", use_container_width=True):
+            try:
+                # Update config in memory
+                config.general.cost_limit_per_day = daily_limit
+                config.general.cost_limit_per_run = run_limit
+
+                # Write to config file
+                config_path = PROJECT_ROOT / "config.yaml"
+                with open(config_path, "r") as f:
+                    config_data = yaml.safe_load(f) or {}
+
+                if "general" not in config_data:
+                    config_data["general"] = {}
+
+                config_data["general"]["cost_limit_per_day"] = daily_limit
+                config_data["general"]["cost_limit_per_run"] = run_limit
+
+                with open(config_path, "w") as f:
+                    yaml.dump(config_data, f, default_flow_style=False)
+
+                st.success(f"✓ Limits saved!\n- Daily: ${daily_limit:.2f}\n- Per Run: ${run_limit:.2f}")
+            except Exception as e:
+                st.error(f"Failed to save limits: {str(e)}")
+
+    st.divider()
+
+    all_runs = fetch_all_runs()
+
+    if not all_runs:
+        st.info("No runs available yet. Run evaluations to see cost data.")
+        return
+
+    # Summary metrics
+    st.markdown("#### Overall Cost Summary")
+
+    total_cost = sum(r['cost'] or 0 for r in all_runs)
+    total_prompts = sum(r['num_prompts'] for r in all_runs)
+    avg_cost_per_prompt = (total_cost / total_prompts) if total_prompts > 0 else 0
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Cost (All Runs)", f"${total_cost:.2f}")
+    with col2:
+        st.metric("Total Prompts", total_prompts)
+    with col3:
+        st.metric("Avg Cost/Prompt", f"${avg_cost_per_prompt:.4f}")
+    with col4:
+        st.metric("Number of Runs", len(all_runs))
+
+    st.divider()
+
+    # Cost by engine
+    st.markdown("#### Cost by Engine")
+
+    engine_costs = {}
+    engine_prompts = {}
+    for run in all_runs:
+        engine = run['engine']
+        if engine not in engine_costs:
+            engine_costs[engine] = 0
+            engine_prompts[engine] = 0
+        engine_costs[engine] += run['cost'] or 0
+        engine_prompts[engine] += run['num_prompts']
+
+    engine_data = []
+    for engine in sorted(engine_costs.keys()):
+        cost = engine_costs[engine]
+        prompts = engine_prompts[engine]
+        avg_per_prompt = (cost / prompts) if prompts > 0 else 0
+        engine_data.append({
+            'Engine': engine,
+            'Total Cost': cost,
+            'Total Prompts': prompts,
+            'Avg Cost/Prompt': avg_per_prompt,
+            'Num Runs': sum(1 for r in all_runs if r['engine'] == engine)
+        })
+
+    df_engines = pd.DataFrame(engine_data)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.dataframe(df_engines, use_container_width=True, hide_index=True)
+
+    with col2:
+        if not df_engines.empty:
+            fig = px.bar(
+                df_engines,
+                x='Engine',
+                y='Total Cost',
+                color='Engine',
+                labels={'Total Cost': 'Total Cost ($)'},
+                title='Total Cost by Engine'
+            )
+            fig.update_layout(
+                height=350,
+                showlegend=False,
+                margin=dict(l=0, r=0, t=30, b=0),
+                template='plotly_white'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+
+    # Cost trend over time
+    st.markdown("#### Cost Trend (Last 30 Days)")
+    cost_trends = fetch_cost_trends(30)
+
+    if cost_trends:
+        df_costs = pd.DataFrame([
+            {
+                'Date': datetime.fromisoformat(t['timestamp']).date(),
+                'Cost': t['cost'] or 0,
+                'Engine': t['engine'],
+                'Prompts': t['num_prompts']
+            }
+            for t in cost_trends
+        ])
+
+        fig = go.Figure()
+        for engine in sorted(df_costs['Engine'].unique()):
+            engine_data = df_costs[df_costs['Engine'] == engine]
+            fig.add_trace(go.Scatter(
+                x=engine_data['Date'],
+                y=engine_data['Cost'],
+                mode='lines+markers',
+                name=engine,
+                line=dict(width=2),
+                marker=dict(size=6)
+            ))
+
+        fig.update_layout(
+            hovermode='x unified',
+            height=450,
+            margin=dict(l=0, r=0, t=0, b=0),
+            template='plotly_white',
+            yaxis_title='Cost ($)',
+            xaxis_title='Date',
+            legend=dict(x=0.01, y=0.99)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No cost trend data available yet.")
+
+    st.divider()
+
+    # Detailed run costs
+    st.markdown("#### All Runs - Detailed Cost Breakdown")
+
+    df_runs = pd.DataFrame([
+        {
+            'Run ID': r['run_id'][-8:],
+            'Timestamp': datetime.fromisoformat(r['timestamp']).strftime('%Y-%m-%d %H:%M'),
+            'Engine': r['engine'],
+            'Prompts': r['num_prompts'],
+            'Total Cost': f"${r['cost']:.4f}" if r['cost'] else "$0.00",
+            'Cost/Prompt': f"${(r['cost'] / r['num_prompts']):.4f}" if r['num_prompts'] > 0 else "$0.00",
+            'Duration (s)': r['duration_seconds'] or 0
+        }
+        for r in all_runs
+    ])
+
+    st.dataframe(df_runs, use_container_width=True, hide_index=True)
+
+
 def render_module6_checks_view():
     """Render the Module 6 (Website Accessibility) checks independent view."""
     st.subheader("Website and Crawler Accessibility Checks")
@@ -1507,7 +1711,7 @@ def main():
     with col2:
         view_mode = st.segmented_control(
             "View",
-            ["Dashboard", "Module 6 Checks"],
+            ["Dashboard", "Cost", "Module 6 Checks"],
             selection_mode="single",
             key="view_mode_control"
         )
@@ -1515,6 +1719,11 @@ def main():
             st.session_state.view_mode = view_mode
 
     st.divider()
+
+    # Cost view
+    if st.session_state.view_mode == "Cost":
+        render_cost_view()
+        return
 
     # Module 6 Checks view
     if st.session_state.view_mode == "Module 6 Checks":
