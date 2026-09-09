@@ -43,7 +43,13 @@ class RunOptions:
 
 
 class CostTracker:
-    """Tracks and enforces cost limits for evaluation runs."""
+    """Tracks and enforces cost limits for evaluation runs.
+
+    Thread-safe cost tracking for concurrent prompt execution. Cost limit is
+    enforced when add() is called. With concurrent execution, multiple prompts
+    in flight may finish at the same time; the limit may be exceeded by at most
+    the cost of concurrent requests that complete after the limit check.
+    """
 
     def __init__(self, limit_dollars: float):
         """Initialize cost tracker with a budget limit."""
@@ -81,14 +87,16 @@ class CostTracker:
 
     def summary(self) -> str:
         """Get human-readable cost summary."""
-        return f"Spent ${self.spent:.2f} / ${self.limit:.2f} limit"
+        with self._lock:
+            return f"Spent ${self.spent:.2f} / ${self.limit:.2f} limit"
 
     def breakdown(self) -> Dict[str, float]:
         """Get cost breakdown by prompt."""
-        breakdown = {}
-        for prompt_id, cost in self.prompt_costs:
-            breakdown[prompt_id] = breakdown.get(prompt_id, 0) + cost
-        return breakdown
+        with self._lock:
+            breakdown = {}
+            for prompt_id, cost in self.prompt_costs:
+                breakdown[prompt_id] = breakdown.get(prompt_id, 0) + cost
+            return breakdown
 
 
 class Evaluator:
@@ -329,7 +337,10 @@ class Evaluator:
         if options.dry_run:
             logger.info("DRY RUN: Would cost ${total_estimated_cost:.2f} (no API calls made)")
 
-        # Run all prompts concurrently with max 4 workers
+        # Run all prompts concurrently with max 4 workers.
+        # Cost limits are enforced per-run via CostTracker (thread-safe).
+        # Per-day limits are checked before pipeline starts in orchestrator.py.
+        # Token counting (input/output) happens as results complete in main thread.
         results: List[RunResult] = []
         succeeded = 0
         failed = 0
@@ -344,7 +355,8 @@ class Evaluator:
             }
 
             for future in as_completed(futures):
-                # Stop submitting new work if cost limit is reached
+                # Stop submitting new work if cost limit is reached.
+                # In-flight requests may still complete, slightly exceeding the limit.
                 if self.cost_tracker.limit_exceeded:
                     executor.shutdown(wait=False)
                     break
