@@ -85,6 +85,59 @@ class CostTracker:
         with self._lock:
             return max(0.0, self.limit - self.spent)
 
+    def can_afford(self, estimated_cost: float) -> bool:
+        """
+        Check if estimated cost fits within remaining budget.
+
+        Args:
+            estimated_cost: Estimated cost to check
+
+        Returns:
+            True if cost would not exceed limit, False otherwise
+        """
+        with self._lock:
+            return self.spent + estimated_cost <= self.limit
+
+    def try_reserve_budget(self, prompt_id: str, estimated_cost: float) -> tuple[bool, str]:
+        """
+        Atomically check if budget is available and pre-reserve it for a prompt.
+
+        This ensures that concurrent execution never exceeds the limit by reserving
+        estimated budget before execution. Actual cost replaces reserved cost later.
+
+        Args:
+            prompt_id: ID of the prompt
+            estimated_cost: Estimated cost to reserve
+
+        Returns:
+            (success: bool, reservation_id: str) — if success is True, budget was
+            reserved and the reservation_id can be used to confirm actual cost later
+        """
+        with self._lock:
+            if self.spent + estimated_cost > self.limit:
+                return False, ""
+
+            reservation_id = f"reserved-{prompt_id}"
+            self.spent += estimated_cost
+            self.prompt_costs.append((reservation_id, estimated_cost))
+            return True, reservation_id
+
+    def confirm_actual_cost(self, reservation_id: str, prompt_id: str, actual_cost: float) -> None:
+        """
+        Replace a budget reservation with actual cost.
+
+        Args:
+            reservation_id: The ID from try_reserve_budget
+            prompt_id: The prompt ID
+            actual_cost: The actual cost from the API
+        """
+        with self._lock:
+            for i, (cost_id, cost_amount) in enumerate(self.prompt_costs):
+                if cost_id == reservation_id:
+                    self.prompt_costs[i] = (prompt_id, actual_cost)
+                    self.spent = self.spent - cost_amount + actual_cost
+                    break
+
     def summary(self) -> str:
         """Get human-readable cost summary."""
         with self._lock:
@@ -155,23 +208,14 @@ class Evaluator:
         options = options or RunOptions()
 
         try:
-            # Estimate cost before running (only if not dry_run)
-            estimated_tokens = 1000 + 1500  # Rough estimate
-            estimated_cost = self.engine.estimate_cost(
-                prompt_tokens=1000,
-                completion_tokens=1500,
-            )
-
-            # Check cost limit
-            remaining = self.cost_tracker.remaining()
-            if estimated_cost > remaining and not options.dry_run:
-                raise CostLimitExceeded(
-                    f"Insufficient budget: ${estimated_cost:.2f} > ${remaining:.2f} remaining"
-                )
+            # Note: Cost limit checking is done in run_batch before submitting
+            # prompts to the executor (via try_reserve_budget). Here we only
+            # track analysis costs. For dry_run, no API calls or cost tracking.
 
             # Run the engine (unless dry_run)
             if options.dry_run:
                 # Return a dry-run result without calling the API
+                estimated_cost = self.engine.estimate_cost(1000, 1500)
                 result = RunResult(
                     run_id=f"{prompt.id}-{self.engine.name}-dryrun-{uuid.uuid4().hex[:12]}",
                     run_batch_id=self.run_batch_id,
@@ -200,9 +244,9 @@ class Evaluator:
                 # rate_limited) before anything that can raise.
                 self._save_result_best_effort(result)
 
-                # Track actual cost (may raise CostLimitExceeded)
-                if result.actual_cost is not None:
-                    self.cost_tracker.add(prompt.id, result.actual_cost)
+                # Note: Actual cost tracking is done in run_batch after prompt completion
+                # (via confirm_actual_cost from reservation). This ensures atomic
+                # cost tracking with the budget reservation system.
 
                 # Extract analysis — best-effort, success only.
                 if result.status == "success" and result.response_text:
@@ -341,6 +385,7 @@ class Evaluator:
         # Cost limits are enforced per-run via CostTracker (thread-safe).
         # Per-day limits are checked before pipeline starts in orchestrator.py.
         # Token counting (input/output) happens as results complete in main thread.
+        # Budget is checked before submitting each prompt to prevent overspend.
         results: List[RunResult] = []
         succeeded = 0
         failed = 0
@@ -348,23 +393,61 @@ class Evaluator:
         total_output_tokens = 0
 
         max_workers = min(4, len(prompts_list))
+        prompt_reservations = {}  # Maps future -> (prompt, reservation_id)
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(self.run_one, prompt, options): prompt
-                for prompt in prompts_list
-            }
+            futures = {}
+            for prompt in prompts_list:
+                # Atomically check and reserve budget before submitting to executor
+                estimated_cost = self.engine.estimate_cost(1000, 1500)
+
+                if not options.dry_run:
+                    reserved, reservation_id = self.cost_tracker.try_reserve_budget(
+                        prompt.id, estimated_cost
+                    )
+                    if not reserved:
+                        logger.warning(
+                            f"Insufficient budget for prompt {prompt.id}: "
+                            f"${estimated_cost:.2f} estimated > "
+                            f"${self.cost_tracker.remaining():.2f} remaining"
+                        )
+                        cost_limit_result = RunResult(
+                            run_id=f"cost-limit-{uuid.uuid4().hex[:12]}",
+                            run_batch_id=self.run_batch_id,
+                            prompt_id=prompt.id,
+                            engine=self.engine.name,
+                            model=self.engine.model_name,
+                            status="cost_limit_exceeded",
+                            response_text=None,
+                            error=f"Insufficient budget: ${estimated_cost:.2f} > ${self.cost_tracker.remaining():.2f} remaining",
+                            latency_ms=None,
+                            engine_name=self.engine.__class__.__name__,
+                            run_timestamp=self.run_timestamp,
+                            run_type=options.run_type,
+                        )
+                        results.append(cost_limit_result)
+                        failed += 1
+                        continue
+                else:
+                    reservation_id = None
+
+                future = executor.submit(self.run_one, prompt, options)
+                futures[future] = prompt
+                prompt_reservations[future] = reservation_id
 
             for future in as_completed(futures):
-                # Stop submitting new work if cost limit is reached.
-                # In-flight requests may still complete, slightly exceeding the limit.
-                if self.cost_tracker.limit_exceeded:
-                    executor.shutdown(wait=False)
-                    break
-
                 prompt = futures[future]
+                reservation_id = prompt_reservations.get(future)
+
                 try:
                     result = future.result()
                     results.append(result)
+
+                    # Confirm actual cost if we had a reservation
+                    if reservation_id and result.actual_cost is not None:
+                        self.cost_tracker.confirm_actual_cost(
+                            reservation_id, prompt.id, result.actual_cost
+                        )
 
                     if result.status == "success":
                         succeeded += 1
