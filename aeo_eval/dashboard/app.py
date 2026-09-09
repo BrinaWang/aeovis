@@ -1910,11 +1910,12 @@ def main():
     if "view_mode" not in st.session_state:
         st.session_state.view_mode = "Dashboard"
 
-    # Enhanced view mode selector with better visual design
-    st.markdown("<div style='text-align: center; margin-bottom: 1rem;'><h3 style='margin: 0; color: #0f172a;'>AEO Visibility Platform</h3></div>", unsafe_allow_html=True)
+    # Sidebar: Navigation and Run selection
+    with st.sidebar:
+        st.markdown("<div style='text-align: center; margin-bottom: 1.5rem;'><h3 style='margin: 0; color: #1e40af; font-size: 1.1rem;'>AEO Visibility</h3></div>", unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
+        # View mode selector at top of sidebar
+        st.markdown("<h4 style='color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem;'>Navigation</h4>", unsafe_allow_html=True)
         view_mode = st.segmented_control(
             "View",
             ["Dashboard", "Cost", "Module 6 Checks"],
@@ -1924,77 +1925,8 @@ def main():
         if view_mode:
             st.session_state.view_mode = view_mode
 
-    st.divider()
-
-    # Cost view
-    if st.session_state.view_mode == "Cost":
-        render_cost_view()
-        return
-
-    # Module 6 Checks view
-    if st.session_state.view_mode == "Module 6 Checks":
-        render_module6_checks_view()
-        return
-
-    # Dashboard view (original)
-    st.title("AEO Visibility Dashboard")
-
-    # Sidebar: Run new evaluation and selection
-    with st.sidebar:
-        st.markdown("<h2 style='color: #1e40af; margin-top: 0; font-size: 1.25rem;'>Evaluation Control</h2>", unsafe_allow_html=True)
-
-        # Run new evaluation section
-        with st.expander("Run New Evaluation", expanded=False):
-            st.markdown("##### Engine Selection")
-            engine_choice = st.radio(
-                "Choose engine:",
-                available_engines(),
-                horizontal=True,
-                help="Engines come from the provider registry"
-            )
-
-            st.markdown("##### Evaluation Parameters")
-            num_prompts = st.slider(
-                "Number of prompts:",
-                1, 240, 5,
-                help="How many questions to evaluate"
-            )
-
-            all_prompts = load_prompts(str(config.general.question_json_path))
-            topic_options = ["All Topics"] + sorted({p.topic for p in all_prompts})
-            priority_options = ["All Priorities", "high", "medium", "low"]
-
-            col1, col2 = st.columns(2)
-            with col1:
-                topic_filter = st.selectbox(
-                    "Topic (optional):",
-                    topic_options,
-                    key="run_topic"
-                )
-            with col2:
-                priority_filter = st.selectbox(
-                    "Priority (optional):",
-                    priority_options,
-                    key="run_priority"
-                )
-
-            if st.button("Start Evaluation", type="primary", use_container_width=True):
-                with st.spinner(f"Running evaluation with {engine_choice}..."):
-                    result = run_evaluation(
-                        engine_name=engine_choice,
-                        num_prompts=num_prompts,
-                        topic=topic_filter,
-                        priority=priority_filter
-                    )
-
-                    if "error" in result:
-                        st.error(f"Evaluation failed: {result['error']}")
-                    else:
-                        st.success(f"✓ Evaluation complete! Run ID: {result.get('run_id', 'unknown')[-8:]}")
-                        st.balloons()
-                        st.rerun()
-
         st.divider()
+
         st.markdown("<h2 style='color: #1e40af; font-size: 1.25rem; margin-bottom: 1rem;'>Run Selection</h2>", unsafe_allow_html=True)
 
         # Fetch all runs
@@ -2083,6 +2015,72 @@ def main():
                             st.error(f"Failed to delete runs: {str(e)}")
                     else:
                         st.error("Please check the confirmation box before deleting.")
+
+    # Cost view
+    if st.session_state.view_mode == "Cost":
+        render_cost_view()
+        return
+
+    # Module 6 Checks view
+    if st.session_state.view_mode == "Module 6 Checks":
+        render_module6_checks_view()
+        return
+
+    # Dashboard view (original)
+    st.title("AEO Visibility Dashboard")
+
+    # Evaluation Control section on Dashboard page
+    st.markdown("<h3 style='color: #1e40af; margin-top: 1.5rem; margin-bottom: 1rem;'>Run New Evaluation</h3>", unsafe_allow_html=True)
+    with st.expander("Configure & Run", expanded=False):
+            st.markdown("##### Engine Selection")
+            engine_choice = st.radio(
+                "Choose engine:",
+                available_engines(),
+                horizontal=True,
+                help="Engines come from the provider registry"
+            )
+
+            st.markdown("##### Evaluation Parameters")
+            num_prompts = st.slider(
+                "Number of prompts:",
+                1, 240, 5,
+                help="How many questions to evaluate"
+            )
+
+            all_prompts = load_prompts(str(config.general.question_json_path))
+            topic_options = ["All Topics"] + sorted({p.topic for p in all_prompts})
+            priority_options = ["All Priorities", "high", "medium", "low"]
+
+            col1, col2 = st.columns(2)
+            with col1:
+                topic_filter = st.selectbox(
+                    "Topic (optional):",
+                    topic_options,
+                    key="run_topic"
+                )
+            with col2:
+                priority_filter = st.selectbox(
+                    "Priority (optional):",
+                    priority_options,
+                    key="run_priority"
+                )
+
+            if st.button("Start Evaluation", type="primary", use_container_width=True):
+                with st.spinner(f"Running evaluation with {engine_choice}..."):
+                    result = run_evaluation(
+                        engine_name=engine_choice,
+                        num_prompts=num_prompts,
+                        topic=topic_filter,
+                        priority=priority_filter
+                    )
+
+                    if "error" in result:
+                        st.error(f"Evaluation failed: {result['error']}")
+                    else:
+                        st.success(f"✓ Evaluation complete! Run ID: {result.get('run_id', 'unknown')[-8:]}")
+                        st.balloons()
+                        st.rerun()
+
 
     # Run info header with improved styling
     st.markdown("<hr style='border: none; border-top: 2px solid #e2e8f0; margin: 2rem 0;'>", unsafe_allow_html=True)
