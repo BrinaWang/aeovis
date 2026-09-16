@@ -2,7 +2,7 @@
 
 *State as of 2026-09-16. Repository: `aeovis` (branch `main`). Tests: 278 passing.*
 
-This is the single document to read when taking over the project. It covers why the project exists, what it is made of (data, corpus, code), how the implementation works, how to operate it, what is done, what is not, and what to watch out for. Where a topic needs code-level depth, it points to `architecture.md`, which is the line-by-line technical reference; this document does not repeat that detail but is complete enough to run and change the system without it.
+This document covers why this project exists, what it is made of (data, corpus, code), how the implementation works, how to operate it, what is done, what is not, and what to watch out for. Where a topic needs code-level depth, it points to `architecture.md`, which is the line-by-line technical reference; this document does not repeat that detail but is complete enough to run and change the system without it.
 
 Companion documents in the repository:
 
