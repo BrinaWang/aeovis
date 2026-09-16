@@ -22,19 +22,21 @@ evaluation:
   - https://www.striim.com/docs/
   - https://www.striim.com/customers/
 general:
-  cost_limit_per_day: 10.0
-  cost_limit_per_run: 1.0
+  cost_limit_per_day: 7.0
+  cost_limit_per_run: 5.0
   log_level: INFO
   output_db_path: data/eval_runs.db
   question_json_path: question.json
 providers:
   claude:
-    cost_per_1k_input_tokens: 0.003
-    cost_per_1k_output_tokens: 0.015
-    model_name: claude-opus-5
+    # Claude Sonnet 5: $2/M input, $10/M output
+    cost_per_1k_input_tokens: 0.002
+    cost_per_1k_output_tokens: 0.01
+    max_tokens: 8000
+    model_name: claude-sonnet-5
     rate_limit_rpm: 100
     rate_limit_tpm: 150000
-    timeout_seconds: 60
+    timeout_seconds: 300
   gemini:
     cost_per_1k_input_tokens: 0.075
     cost_per_1k_output_tokens: 0.3

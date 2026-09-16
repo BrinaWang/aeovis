@@ -20,8 +20,18 @@ from aeo_eval.storage.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
+# Engines that produce synthetic responses. Runs on these stay fully
+# offline: they act as their own Module 3 analyzer rather than calling
+# out to a real provider.
+MOCK_ENGINE_NAMES = frozenset({"mock", "random-mock"})
+
 # Default competitor set used for brand/claim extraction (Module 3).
 DEFAULT_COMPETITORS = ["Fivetran", "Confluent", "Kafka", "Oracle GoldenGate", "AWS DMS"]
+
+# Assumed per-prompt token counts behind every pre-run cost estimate and
+# budget reservation.
+_EST_INPUT_TOKENS = 1000
+_EST_OUTPUT_TOKENS = 1500
 
 
 class CostLimitExceeded(Exception):
@@ -177,7 +187,14 @@ class Evaluator:
         # by default, configurable via "analysis_provider"), falling
         # back to the engine under test when it can't be constructed
         # (e.g. no API key).
-        analyzer_name = self.config.get("analysis_provider", "claude")
+        #
+        # Mock engines analyze themselves instead: their responses are
+        # synthetic, so paying for a real analyzer call per prompt buys
+        # nothing and makes an otherwise instant, free run cost real
+        # money and minutes of wall-clock. Set "analysis_provider"
+        # explicitly to override.
+        default_analyzer = engine.name if engine.name in MOCK_ENGINE_NAMES else "claude"
+        analyzer_name = self.config.get("analysis_provider", default_analyzer)
         if engine.name == analyzer_name:
             self.analyzer_engine: BaseEngine = engine
         else:
@@ -191,13 +208,23 @@ class Evaluator:
                 )
                 self.analyzer_engine = engine
 
-    def run_one(self, prompt: Prompt, options: Optional[RunOptions] = None) -> RunResult:
+    def run_one(
+        self,
+        prompt: Prompt,
+        options: Optional[RunOptions] = None,
+        *,
+        budget_reserved: bool = False,
+    ) -> RunResult:
         """
         Run a single prompt through the engine.
 
         Args:
             prompt: The prompt to run
             options: Run options (dry_run, run_type, etc.)
+            budget_reserved: Set by run_batch, which already reserved this
+                prompt's estimated cost via try_reserve_budget. Leave False
+                for a direct call so the per-run limit is enforced here
+                instead — reserving twice would double-count the prompt.
 
         Returns:
             RunResult with engine output and metadata
@@ -215,7 +242,7 @@ class Evaluator:
             # Run the engine (unless dry_run)
             if options.dry_run:
                 # Return a dry-run result without calling the API
-                estimated_cost = self.engine.estimate_cost(1000, 1500)
+                estimated_cost = self.engine.estimate_cost(_EST_INPUT_TOKENS, _EST_OUTPUT_TOKENS)
                 result = RunResult(
                     run_id=f"{prompt.id}-{self.engine.name}-dryrun-{uuid.uuid4().hex[:12]}",
                     run_batch_id=self.run_batch_id,
@@ -232,6 +259,19 @@ class Evaluator:
                     run_type=options.run_type,
                 )
             else:
+                # run_batch reserves each prompt's budget before submitting
+                # it here. A direct run_one() call has no reservation, so
+                # the per-run limit has to be enforced at this entry point
+                # or it isn't enforced at all.
+                if not budget_reserved:
+                    estimated_cost = self.engine.estimate_cost(_EST_INPUT_TOKENS, _EST_OUTPUT_TOKENS)
+                    if not self.cost_tracker.can_afford(estimated_cost):
+                        raise CostLimitExceeded(
+                            f"Cost limit exceeded: estimated ${estimated_cost:.2f} "
+                            f"> ${self.cost_tracker.remaining():.2f} remaining "
+                            f"of ${self.cost_tracker.limit:.2f}"
+                        )
+
                 # Run the engine
                 result = self.engine.run(prompt.prompt)
                 result.prompt_id = prompt.id
@@ -374,7 +414,7 @@ class Evaluator:
         # Calculate cost estimate before running
         total_estimated_cost = 0.0
         for prompt in prompts_list:
-            total_estimated_cost += self.engine.estimate_cost(1000, 1500)
+            total_estimated_cost += self.engine.estimate_cost(_EST_INPUT_TOKENS, _EST_OUTPUT_TOKENS)
 
         logger.info(f"Estimated cost: ${total_estimated_cost:.2f}")
 
@@ -399,7 +439,7 @@ class Evaluator:
             futures = {}
             for prompt in prompts_list:
                 # Atomically check and reserve budget before submitting to executor
-                estimated_cost = self.engine.estimate_cost(1000, 1500)
+                estimated_cost = self.engine.estimate_cost(_EST_INPUT_TOKENS, _EST_OUTPUT_TOKENS)
 
                 if not options.dry_run:
                     reserved, reservation_id = self.cost_tracker.try_reserve_budget(
@@ -431,7 +471,9 @@ class Evaluator:
                 else:
                     reservation_id = None
 
-                future = executor.submit(self.run_one, prompt, options)
+                future = executor.submit(
+                    self.run_one, prompt, options, budget_reserved=True
+                )
                 futures[future] = prompt
                 prompt_reservations[future] = reservation_id
 

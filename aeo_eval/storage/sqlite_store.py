@@ -39,6 +39,64 @@ def resolve_sqlite_target(db_path: str | Path) -> tuple[str, bool]:
     return str(path), False
 
 
+def _json_field(value):
+    """Serialize a structured column value for SQLite.
+
+    Lists/dicts are stored as JSON text (the read path json.loads them
+    back). None passes through as NULL, and an already-serialized string
+    is stored as-is so callers can pass either form.
+    """
+    if value is None or isinstance(value, str):
+        return value
+    return json.dumps(value)
+
+
+def _parse_json_field(record: Dict, key: str) -> None:
+    """Deserialize a JSON column in place, leaving non-JSON values as-is."""
+    if record.get(key):
+        try:
+            record[key] = json.loads(record[key])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+
+_RECOMMENDATION_INSERT = """
+    INSERT INTO recommendations
+    (id, gap_id, problem, evidence_summary, recommended_action,
+     affected_pages, suggested_owner, priority, estimated_effort,
+     measurement_plan, confidence, status, platform,
+     implementation_steps, templates_applied, created_timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+
+def _recommendation_row(recommendation: Dict) -> tuple:
+    """Parameter tuple for _RECOMMENDATION_INSERT.
+
+    The optional columns (platform, implementation_steps,
+    templates_applied) bind NULL when absent; apply_schema_migrations
+    guarantees they exist on any database init_db has touched.
+    """
+    return (
+        recommendation["id"],
+        recommendation["gap_id"],
+        recommendation["problem"],
+        recommendation["evidence_summary"],
+        recommendation["recommended_action"],
+        json.dumps(recommendation.get("affected_pages", [])),
+        recommendation["suggested_owner"],
+        recommendation["priority"],
+        recommendation["estimated_effort"],
+        recommendation["measurement_plan"],
+        recommendation["confidence"],
+        recommendation["status"],
+        recommendation.get("platform"),
+        _json_field(recommendation.get("implementation_steps")),
+        _json_field(recommendation.get("templates_applied")),
+        recommendation["created_timestamp"],
+    )
+
+
 class SQLiteStore:
     def __init__(self, db_path: str | Path):
         self.db_path, self._uri = resolve_sqlite_target(db_path)
@@ -50,6 +108,10 @@ class SQLiteStore:
 
     def init_db(self) -> None:
         """Initialize the database by loading schema from sqlite_schema.sql."""
+        # Apply migrations FIRST to add any missing columns to existing tables
+        # This prevents schema script from failing on indexes for non-existent columns
+        self.apply_schema_migrations()
+
         with self._connect() as conn:
             # Enable foreign keys
             conn.execute("PRAGMA foreign_keys = ON")
@@ -76,6 +138,46 @@ class SQLiteStore:
                     """
                 )
             conn.commit()
+
+    def apply_schema_migrations(self) -> bool:
+        """Add columns to existing tables that the schema script can't.
+
+        All CREATE TABLE/INDEX DDL lives in sqlite_schema.sql (idempotent
+        via IF NOT EXISTS); the only work the schema script cannot do is
+        ALTER an existing table. This must run before the schema script so
+        its indexes on the new columns don't fail on an old database.
+
+        Returns:
+            True if migration succeeded, False otherwise
+        """
+        try:
+            with self._connect() as conn:
+                cursor = conn.execute("PRAGMA table_info(recommendations)")
+                existing_columns = {row[1] for row in cursor.fetchall()}
+                if not existing_columns:
+                    # Fresh database: the schema script creates the table
+                    # with every column already in place.
+                    return True
+
+                columns_to_add = {
+                    "platform": "TEXT",
+                    "implementation_steps": "TEXT",
+                    "templates_applied": "TEXT",
+                }
+
+                for col_name, col_type in columns_to_add.items():
+                    if col_name not in existing_columns:
+                        conn.execute(
+                            f"ALTER TABLE recommendations ADD COLUMN {col_name} {col_type}"
+                        )
+                        logger.info(f"Added column {col_name} to recommendations table")
+
+                conn.commit()
+                return True
+
+        except sqlite3.Error as e:
+            logger.error(f"Error applying schema migrations: {e}")
+            return False
 
     def apply_retention(self) -> Dict[str, int]:
         """Delete rows older than their data_retention_policy window.
@@ -583,90 +685,32 @@ class SQLiteStore:
     def save_recommendation(self, recommendation: Dict) -> None:
         """Save a recommendation.
 
-        Handles the will_auto_publish field from the recommendation dict:
-        - If will_auto_publish is True, status is set to "pending_publish"
-        - If will_auto_publish is False, status is set to "draft"
-
         Args:
             recommendation: Recommendation dict with keys:
                 - id, gap_id, problem, evidence_summary, recommended_action,
                   affected_pages, suggested_owner, priority, estimated_effort,
-                  measurement_plan, confidence, will_auto_publish, created_timestamp
-                The status field is derived from will_auto_publish if not explicitly set.
+                  measurement_plan, confidence, status, created_timestamp
+                - Optional: platform, implementation_steps, templates_applied
         """
-        import json
-
-        with self._connect() as conn:
-            conn.execute("PRAGMA foreign_keys = ON")
-            conn.execute(
-                """
-                INSERT INTO recommendations
-                (id, gap_id, problem, evidence_summary, recommended_action,
-                 affected_pages, suggested_owner, priority, estimated_effort,
-                 measurement_plan, confidence, status, created_timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    recommendation["id"],
-                    recommendation["gap_id"],
-                    recommendation["problem"],
-                    recommendation["evidence_summary"],
-                    recommendation["recommended_action"],
-                    json.dumps(recommendation.get("affected_pages", [])),
-                    recommendation["suggested_owner"],
-                    recommendation["priority"],
-                    recommendation["estimated_effort"],
-                    recommendation["measurement_plan"],
-                    recommendation["confidence"],
-                    recommendation["status"],
-                    recommendation["created_timestamp"],
-                ),
-            )
-            conn.commit()
+        self.save_recommendations([recommendation])
 
     def save_recommendations(self, recommendations: List[Dict]) -> None:
         """Save multiple recommendations in a single transaction.
 
-        Handles the will_auto_publish field for each recommendation:
-        - If will_auto_publish is True, status is set to "pending_publish"
-        - If will_auto_publish is False, status is set to "draft"
-
         Args:
-            recommendations: List of recommendation dicts
+            recommendations: List of recommendation dicts (can include optional
+                platform, implementation_steps, templates_applied fields)
         """
-        import json
-
         if not recommendations:
             return
 
         with self._connect() as conn:
             conn.execute("PRAGMA foreign_keys = ON")
             try:
-                for recommendation in recommendations:
-                    conn.execute(
-                        """
-                        INSERT INTO recommendations
-                        (id, gap_id, problem, evidence_summary, recommended_action,
-                         affected_pages, suggested_owner, priority, estimated_effort,
-                         measurement_plan, confidence, status, created_timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            recommendation["id"],
-                            recommendation["gap_id"],
-                            recommendation["problem"],
-                            recommendation["evidence_summary"],
-                            recommendation["recommended_action"],
-                            json.dumps(recommendation.get("affected_pages", [])),
-                            recommendation["suggested_owner"],
-                            recommendation["priority"],
-                            recommendation["estimated_effort"],
-                            recommendation["measurement_plan"],
-                            recommendation["confidence"],
-                            recommendation["status"],
-                            recommendation["created_timestamp"],
-                        ),
-                    )
+                conn.executemany(
+                    _RECOMMENDATION_INSERT,
+                    [_recommendation_row(rec) for rec in recommendations],
+                )
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -719,7 +763,8 @@ class SQLiteStore:
                 SELECT id, gap_id, problem, evidence_summary, recommended_action,
                        affected_pages, suggested_owner, priority, estimated_effort,
                        measurement_plan, confidence, status, created_by, approved_by,
-                       approval_timestamp, review_notes, created_timestamp, created_at
+                       approval_timestamp, review_notes, platform, implementation_steps,
+                       templates_applied, created_timestamp, created_at
                 FROM recommendations
                 WHERE id = ?
                 """,
@@ -728,17 +773,9 @@ class SQLiteStore:
             row = cursor.fetchone()
             if row:
                 rec_dict = dict(row)
-                # Parse JSON fields
-                if rec_dict.get("affected_pages"):
-                    try:
-                        rec_dict["affected_pages"] = json.loads(rec_dict["affected_pages"])
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                if rec_dict.get("review_notes"):
-                    try:
-                        rec_dict["review_notes"] = json.loads(rec_dict["review_notes"])
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+                for key in ("affected_pages", "review_notes",
+                            "implementation_steps", "templates_applied"):
+                    _parse_json_field(rec_dict, key)
                 return rec_dict
             return None
 
@@ -911,30 +948,33 @@ class SQLiteStore:
         with self._connect() as conn:
             conn.execute("PRAGMA foreign_keys = ON")
             try:
-                for record in records:
-                    conn.execute(
-                        """
-                        INSERT INTO website_checks
-                        (id, run_id, striim_url, crawler, robots_allowed, in_sitemap,
-                         http_status, response_time_ms, noindex, canonical_url,
-                         result, check_timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            record["id"],
-                            record["run_id"],
-                            record["striim_url"],
-                            record["crawler"],
-                            record.get("robots_allowed"),
-                            record.get("in_sitemap"),
-                            record.get("http_status"),
-                            record.get("response_time_ms"),
-                            record.get("noindex"),
-                            record.get("canonical_url"),
-                            record["result"],
-                            record["check_timestamp"],
-                        ),
+                data = [
+                    (
+                        record["id"],
+                        record["run_id"],
+                        record["striim_url"],
+                        record["crawler"],
+                        record.get("robots_allowed"),
+                        record.get("in_sitemap"),
+                        record.get("http_status"),
+                        record.get("response_time_ms"),
+                        record.get("noindex"),
+                        record.get("canonical_url"),
+                        record["result"],
+                        record["check_timestamp"],
                     )
+                    for record in records
+                ]
+                conn.executemany(
+                    """
+                    INSERT INTO website_checks
+                    (id, run_id, striim_url, crawler, robots_allowed, in_sitemap,
+                     http_status, response_time_ms, noindex, canonical_url,
+                     result, check_timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    data,
+                )
                 conn.commit()
                 return len(records)
             except Exception as e:
@@ -968,33 +1008,68 @@ class SQLiteStore:
         with self._connect() as conn:
             conn.execute("PRAGMA foreign_keys = ON")
             try:
-                for record in records:
-                    conn.execute(
-                        """
-                        INSERT INTO crawler_logs
-                        (id, run_id, timestamp, host, path, crawler, http_status,
-                         response_time_ms, edge_action, log_source)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            record.get("id"),
-                            record["run_id"],
-                            record.get("timestamp"),
-                            record.get("host"),
-                            record.get("path"),
-                            record.get("crawler"),
-                            record.get("http_status"),
-                            record.get("response_time_ms"),
-                            record.get("edge_action"),
-                            record.get("log_source"),
-                        ),
+                data = [
+                    (
+                        record.get("id"),
+                        record["run_id"],
+                        record.get("timestamp"),
+                        record.get("host"),
+                        record.get("path"),
+                        record.get("crawler"),
+                        record.get("http_status"),
+                        record.get("response_time_ms"),
+                        record.get("edge_action"),
+                        record.get("log_source"),
                     )
+                    for record in records
+                ]
+                conn.executemany(
+                    """
+                    INSERT INTO crawler_logs
+                    (id, run_id, timestamp, host, path, crawler, http_status,
+                     response_time_ms, edge_action, log_source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    data,
+                )
                 conn.commit()
                 return len(records)
             except Exception as e:
                 conn.rollback()
                 logger.error(f"Error storing crawler logs: {e}")
                 raise
+
+    def get_run_status_and_cost(self, run_id: str) -> tuple[Optional[str], float]:
+        """Get one evaluation run's status and accumulated cost.
+
+        Returns (None, 0.0) when the run doesn't exist.
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT status, cost FROM evaluation_runs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+            if not row:
+                return None, 0.0
+            return row[0], row[1] or 0.0
+
+    def set_run_status(self, run_id: str, status: str) -> None:
+        """Set one evaluation run's status."""
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE evaluation_runs SET status = ? WHERE run_id = ?",
+                (status, run_id),
+            )
+            conn.commit()
+
+    def add_to_run_cost(self, run_id: str, amount: float) -> None:
+        """Add post-evaluation spend (e.g. recommendation LLM calls) to a run's total."""
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE evaluation_runs SET cost = COALESCE(cost, 0) + ? WHERE run_id = ?",
+                (amount, run_id),
+            )
+            conn.commit()
 
     def get_total_cost_and_run_count(self) -> Dict:
         """Get total cost across all runs and number of runs."""
@@ -1174,3 +1249,95 @@ class SQLiteStore:
             """, (today,))
             result = cursor.fetchone()[0]
             return result or 0.0
+
+    def save_recommendation_template(self, template: Dict) -> None:
+        """Save a recommendation template.
+
+        Args:
+            template: Template dict with keys:
+                - id: Unique identifier
+                - platform: 'article', 'reddit', 'linkedin', or 'facebook'
+                - template_type: 'implementation_steps', 'content_outline', or 'post_template'
+                - content: JSON-serializable content structure
+                - created_timestamp: ISO format timestamp
+        """
+        with self._connect() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute(
+                """
+                INSERT INTO recommendation_templates
+                (id, platform, template_type, content, created_timestamp)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    template["id"],
+                    template["platform"],
+                    template["template_type"],
+                    _json_field(template["content"]),
+                    template["created_timestamp"],
+                ),
+            )
+            conn.commit()
+
+    def get_recommendation_template(self, template_id: str) -> Optional[Dict]:
+        """Fetch a single recommendation template.
+
+        Args:
+            template_id: The template ID to fetch
+
+        Returns:
+            Dictionary with template details, or None if not found
+        """
+        with self._connect() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, platform, template_type, content, created_timestamp, created_at
+                FROM recommendation_templates
+                WHERE id = ?
+                """,
+                (template_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                template_dict = dict(row)
+                _parse_json_field(template_dict, "content")
+                return template_dict
+            return None
+
+    def get_recommendation_templates(self, platform: Optional[str] = None, template_type: Optional[str] = None) -> List[Dict]:
+        """Fetch recommendation templates, optionally filtered by platform and type.
+
+        Args:
+            platform: Optional platform filter ('article', 'reddit', 'linkedin', 'facebook')
+            template_type: Optional template type filter ('implementation_steps', 'content_outline', 'post_template')
+
+        Returns:
+            List of template dictionaries
+        """
+        with self._connect() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            query = "SELECT id, platform, template_type, content, created_timestamp, created_at FROM recommendation_templates WHERE 1=1"
+            params = []
+
+            if platform:
+                query += " AND platform = ?"
+                params.append(platform)
+            if template_type:
+                query += " AND template_type = ?"
+                params.append(template_type)
+
+            query += " ORDER BY created_timestamp DESC"
+
+            cursor.execute(query, params)
+            templates = []
+            for row in cursor.fetchall():
+                template_dict = dict(row)
+                _parse_json_field(template_dict, "content")
+                templates.append(template_dict)
+            return templates

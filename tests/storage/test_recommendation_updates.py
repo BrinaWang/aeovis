@@ -386,3 +386,138 @@ class TestWorkflow:
         assert rec0["status"] == "pending_publish"
         assert rec1["status"] == "approved"
         assert rec2["status"] == "rejected"
+
+
+class TestRecommendationJSONFields:
+    """Structured fields must round-trip through SQLite as JSON.
+
+    The read path (get_recommendation / get_recommendations) json.loads
+    implementation_steps and templates_applied, so the write path has to
+    json.dumps them the same way it does affected_pages. Binding a raw
+    Python list raises sqlite3.InterfaceError and aborts the whole save.
+    """
+
+    STEPS = [
+        {"step": "Research topic coverage", "effort": "Medium", "owner": "Content Team"},
+        {"step": "Write draft article", "effort": "High", "owner": "Content Team"},
+    ]
+
+    def _rec(self, gap_id, **extra):
+        rec = {
+            "id": str(uuid.uuid4())[:8],
+            "gap_id": gap_id,
+            "problem": "Low visibility",
+            "evidence_summary": "3 evidence sources",
+            "recommended_action": "Create a guide",
+            "affected_pages": ["https://striim.com/topic/cdc"],
+            "suggested_owner": "Content Team",
+            "priority": 8,
+            "estimated_effort": 2,
+            "measurement_plan": "Re-run questions",
+            "confidence": "high",
+            "status": "draft",
+            "created_timestamp": datetime.now().isoformat(),
+        }
+        rec.update(extra)
+        return rec
+
+    def test_save_recommendation_round_trips_implementation_steps(self, store):
+        gap = create_test_gap(store)
+        rec = self._rec(gap["id"], implementation_steps=self.STEPS)
+
+        store.save_recommendation(rec)
+
+        saved = store.get_recommendation(rec["id"])
+        assert saved is not None
+        assert saved["implementation_steps"] == self.STEPS
+
+    def test_save_recommendation_round_trips_social_media_fields(self, store):
+        gap = create_test_gap(store)
+        rec = self._rec(
+            gap["id"],
+            platform="reddit",
+            implementation_steps=self.STEPS,
+            templates_applied=["tmpl-1", "tmpl-2"],
+        )
+
+        store.save_recommendation(rec)
+
+        saved = store.get_recommendation(rec["id"])
+        assert saved["platform"] == "reddit"
+        assert saved["implementation_steps"] == self.STEPS
+        assert saved["templates_applied"] == ["tmpl-1", "tmpl-2"]
+
+    def test_save_recommendations_batch_persists_all(self, store):
+        """A batch of article + social recs must all commit, not roll back."""
+        gap = create_test_gap(store)
+        recs = [
+            self._rec(gap["id"], implementation_steps=self.STEPS),
+            self._rec(gap["id"], platform="reddit", implementation_steps=self.STEPS),
+            self._rec(gap["id"], platform="linkedin", implementation_steps=self.STEPS),
+            self._rec(gap["id"], platform="facebook", implementation_steps=self.STEPS),
+        ]
+
+        store.save_recommendations(recs)
+
+        for rec in recs:
+            saved = store.get_recommendation(rec["id"])
+            assert saved is not None, f"{rec.get('platform') or 'article'} rec was not saved"
+            assert saved["implementation_steps"] == self.STEPS
+
+
+class TestRecommendationTemplateContent:
+    """Template content must round-trip whatever JSON shape it holds.
+
+    get_recommendation_template json.loads content unconditionally, so the
+    write path has to json.dumps every structured value. Serializing only
+    dicts leaves a list to bind raw, which raises sqlite3.InterfaceError.
+    """
+
+    def _template(self, content, **extra):
+        template = {
+            "id": str(uuid.uuid4())[:8],
+            "platform": "article",
+            "template_type": "content_outline",
+            "content": content,
+            "created_timestamp": datetime.now().isoformat(),
+        }
+        template.update(extra)
+        return template
+
+    def test_dict_content_round_trips(self, store):
+        content = {"sections": ["intro", "body"], "tone": "technical"}
+        template = self._template(content)
+
+        store.save_recommendation_template(template)
+
+        assert store.get_recommendation_template(template["id"])["content"] == content
+
+    def test_list_content_round_trips(self, store):
+        """A list is as valid a JSON document as a dict."""
+        content = [
+            {"heading": "What is CDC?", "words": 300},
+            {"heading": "Oracle CDC setup", "words": 800},
+        ]
+        template = self._template(content, template_type="implementation_steps")
+
+        store.save_recommendation_template(template)
+
+        assert store.get_recommendation_template(template["id"])["content"] == content
+
+    def test_list_content_round_trips_via_list_query(self, store):
+        content = ["step one", "step two"]
+        template = self._template(content, platform="reddit", template_type="post_template")
+
+        store.save_recommendation_template(template)
+
+        templates = store.get_recommendation_templates(platform="reddit")
+        assert [t["content"] for t in templates] == [content]
+
+    def test_preserialized_string_content_is_not_double_encoded(self, store):
+        """Callers may hand over already-serialized JSON; store it as-is."""
+        content = {"sections": ["intro"]}
+        template = self._template(json.dumps(content))
+
+        store.save_recommendation_template(template)
+
+        assert store.get_recommendation_template(template["id"])["content"] == content

@@ -99,24 +99,36 @@ class AEOPipelineOrchestrator:
         """
         logger.info(f"Starting pipeline for {len(prompts)} prompts")
 
-        # Check daily cost limit
-        today_cost = self.store.get_today_cost()
-        daily_limit = app_config.general.cost_limit_per_day
-        if today_cost >= daily_limit:
-            from aeo_eval.runner.evaluator import CostLimitExceeded
-            raise CostLimitExceeded(
-                f"Daily cost limit reached: ${today_cost:.2f} / ${daily_limit:.2f}. "
-                f"No more evaluations allowed today."
-            )
-        logger.info(f"Daily spend so far: ${today_cost:.2f} / ${daily_limit:.2f}")
-
         # Hold one connection open for the entire pipeline. This is what
         # keeps a ":memory:" (shared-cache) database alive across the many
         # short-lived connections opened internally by the Evaluator/
         # SQLiteStore and by the module components below.
         conn = self._connect()
+        # Set once the evaluation has been saved and the run enters the
+        # post-processing stages; the finally below restores it so a run
+        # never stays stuck in "processing" (the evaluation itself did
+        # finish, even if a later stage raised).
+        evaluation_status = None
+        run_id = None
         try:
+            # The schema has to exist before anything queries it — the
+            # daily cost check below included. Running that check first
+            # blew up with "no such table: evaluation_runs" on any fresh
+            # database, and on every ":memory:" run (where the shared-cache
+            # database only survives while this connection is held open).
             self.store.init_db()
+
+            # Check daily cost limit
+            today_cost = self.store.get_today_cost()
+            daily_limit = app_config.general.cost_limit_per_day
+            if today_cost >= daily_limit:
+                from aeo_eval.runner.evaluator import CostLimitExceeded
+                raise CostLimitExceeded(
+                    f"Daily cost limit reached: ${today_cost:.2f} / ${daily_limit:.2f}. "
+                    f"No more evaluations allowed today."
+                )
+            logger.info(f"Daily spend so far: ${today_cost:.2f} / ${daily_limit:.2f}")
+
             purged = self.store.apply_retention()
             purged = {k: v for k, v in purged.items() if v}
             if purged:
@@ -134,6 +146,19 @@ class AEOPipelineOrchestrator:
                 f"({evaluation_run.prompts_succeeded} succeeded, "
                 f"{evaluation_run.prompts_failed} failed)"
             )
+
+            # The evaluator saved the run with its final evaluation status
+            # ("completed"/"partial_failure"/"failed"), but the pipeline
+            # still has metrics/citations/gaps/recommendations ahead — a
+            # run that reads as "completed" mid-pipeline fools the
+            # dashboard (and humans) into thinking it is done. Hold the
+            # run in "processing" until every stage below finishes, then
+            # restore the evaluation's verdict. The cost read here also
+            # feeds the recommendation budget below; nothing between the
+            # two points writes to it.
+            evaluation_status, spent_so_far = self.store.get_run_status_and_cost(run_id)
+            evaluation_status = evaluation_status or "completed"
+            self.store.set_run_status(run_id, "processing")
 
             # Generate test data for mock engines (properly associated with evaluation run)
             if self.engine.name == "random-mock":
@@ -201,27 +226,41 @@ class AEOPipelineOrchestrator:
             if self.engine.name == "claude":
                 recommendation_engine = self.engine
             else:
-                # For non-Claude engines, try to create a Claude engine for recommendations
+                # For non-Claude engines, try to create a Claude engine for
+                # recommendations. Go through the factory so the engine gets
+                # its provider config (including the API key) — the pipeline
+                # config dict here doesn't carry provider credentials.
                 try:
-                    from aeo_eval.engine.claude_engine import ClaudeEngine
-                    recommendation_engine = ClaudeEngine(self.config)
+                    from aeo_eval.engine.factory import create_engine
+                    recommendation_engine = create_engine("claude")
                 except Exception as e:
                     logger.info(f"Could not initialize ClaudeEngine for recommendations: {e}")
 
-            generator = RecommendationGenerator(conn, engine=recommendation_engine)
+            # Recommendation generation makes up to 5 LLM calls per gap, so
+            # it can easily outspend the evaluation itself. Cap it at
+            # whatever is left of the per-run limit after evaluation;
+            # gaps past that point still get free template recommendations.
+            run_limit = float(
+                self.config.get("cost_limit_per_run")
+                or app_config.general.cost_limit_per_run
+            )
+            recommendation_budget = max(0.0, run_limit - spent_so_far)
+            logger.info(
+                f"Recommendation LLM budget: ${recommendation_budget:.2f} "
+                f"(run limit ${run_limit:.2f} - ${spent_so_far:.2f} already spent)"
+            )
+
+            generator = RecommendationGenerator(
+                conn,
+                engine=recommendation_engine,
+                cost_budget=recommendation_budget,
+            )
             recommendations, recommendation_cost = generator.generate_for_run(run_id)
 
             # Add recommendation costs to evaluation run total
             if recommendation_cost > 0:
                 logger.info(f"Recommendation generation cost: ${recommendation_cost:.4f}")
-                cursor = conn.execute("SELECT cost FROM evaluation_runs WHERE run_id = ?", (run_id,))
-                current_cost = cursor.fetchone()[0] or 0.0
-                new_total_cost = current_cost + recommendation_cost
-                conn.execute(
-                    "UPDATE evaluation_runs SET cost = ? WHERE run_id = ?",
-                    (new_total_cost, run_id)
-                )
-                conn.commit()
+                self.store.add_to_run_cost(run_id, recommendation_cost)
 
             num_auto_approved = 0
             for rec in recommendations:
@@ -242,6 +281,11 @@ class AEOPipelineOrchestrator:
                 f"({num_auto_approved} auto-approved)"
             )
         finally:
+            if evaluation_status is not None and run_id is not None:
+                try:
+                    self.store.set_run_status(run_id, evaluation_status)
+                except Exception as e:
+                    logger.warning(f"Failed to restore run status: {e}")
             conn.close()
 
         return {

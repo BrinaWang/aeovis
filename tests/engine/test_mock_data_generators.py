@@ -1,4 +1,5 @@
 """Tests for RandomMockEngine mock data generator methods."""
+import random
 from datetime import datetime, timedelta
 from aeo_eval.engine.mock_engine import RandomMockEngine
 
@@ -75,9 +76,20 @@ def test_generate_mock_crawler_logs_valid_paths():
 
 
 def test_generate_mock_crawler_logs_status_code_distribution():
-    """Test that status codes follow expected distribution."""
-    engine = RandomMockEngine({})
-    logs = engine.generate_mock_crawler_logs(count=200)
+    """Test that status codes follow expected distribution.
+
+    Seeded and run over a large sample on purpose. The generator draws
+    from the global `random` module, so an unseeded 200-record sample put
+    these bounds only ~2.4-2.9 sigma from the mean and the test failed a
+    few percent of runs for no real reason.
+    """
+    state = random.getstate()
+    try:
+        random.seed(20260914)
+        engine = RandomMockEngine({})
+        logs = engine.generate_mock_crawler_logs(count=2000)
+    finally:
+        random.setstate(state)
 
     status_counts = {}
     for log in logs:

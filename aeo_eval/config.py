@@ -36,6 +36,15 @@ class ProviderConfig(BaseModel):
     cost_per_1k_input_tokens: float = Field(default=0.003, ge=0, description="Cost per 1k input tokens")
     cost_per_1k_output_tokens: float = Field(default=0.015, ge=0, description="Cost per 1k output tokens")
     max_retries: Optional[int] = Field(default=None, description="Override global retry policy")
+    max_tokens: int = Field(
+        default=8000,
+        ge=1000,
+        description=(
+            "Max completion tokens per request. Structured-output calls must "
+            "fit their whole JSON document in this budget: a truncated "
+            "response fails to parse and the caller silently loses the data."
+        ),
+    )
 
 
 class GeneralConfig(BaseModel):

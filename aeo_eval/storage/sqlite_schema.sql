@@ -169,6 +169,18 @@ CREATE INDEX IF NOT EXISTS idx_gaps_topic_gap_type ON gaps(topic, gap_type);
 CREATE INDEX IF NOT EXISTS idx_gaps_priority ON gaps(priority);
 CREATE INDEX IF NOT EXISTS idx_gaps_run_id_created_timestamp ON gaps(run_id, created_timestamp);
 
+-- Module 9: Recommendation templates for different platforms
+CREATE TABLE IF NOT EXISTS recommendation_templates (
+    id TEXT PRIMARY KEY,
+    platform TEXT NOT NULL,  -- "article", "reddit", "linkedin", "facebook"
+    template_type TEXT NOT NULL,  -- "implementation_steps", "content_outline", "post_template"
+    content TEXT NOT NULL,    -- JSON: template structure and variables
+    created_timestamp DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_recommendation_templates_platform_type ON recommendation_templates(platform, template_type);
+CREATE INDEX IF NOT EXISTS idx_recommendation_templates_created_timestamp ON recommendation_templates(created_timestamp DESC);
+
 -- Module 9: Recommendations with approval workflow
 CREATE TABLE IF NOT EXISTS recommendations (
     id TEXT PRIMARY KEY,
@@ -187,6 +199,9 @@ CREATE TABLE IF NOT EXISTS recommendations (
     approved_by TEXT,
     approval_timestamp DATETIME,
     review_notes TEXT,       -- JSON: {comment, reason}
+    platform TEXT,           -- "article", "reddit", "linkedin", "facebook"; NULL for articles
+    implementation_steps TEXT, -- JSON: [{step: string, effort: string, owner: string, notes?: string}, ...]
+    templates_applied TEXT,  -- JSON: [template_id, ...]
     created_timestamp DATETIME NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (gap_id) REFERENCES gaps(id)
@@ -194,6 +209,7 @@ CREATE TABLE IF NOT EXISTS recommendations (
 CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
 CREATE INDEX IF NOT EXISTS idx_recommendations_gap_id ON recommendations(gap_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_priority_status ON recommendations(priority DESC, status);
+CREATE INDEX IF NOT EXISTS idx_recommendations_platform ON recommendations(platform);
 
 -- Prompt catalog, persisted so run-scoped queries (e.g. Module 4's
 -- by-topic metrics breakdown) can join raw_responses.prompt_id against

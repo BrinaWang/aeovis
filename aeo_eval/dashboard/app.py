@@ -28,6 +28,8 @@ except (ImportError, Exception):
 
 import sqlite3
 import json
+import threading
+import time
 import yaml
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -37,6 +39,13 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 from aeo_eval.config import config, PROJECT_ROOT
+from aeo_eval.dashboard.progress import fetch_run_progress, describe_progress
+from aeo_eval.dashboard.formatting import (
+    EFFORT_LABELS,
+    get_effort_color,
+    get_platform_badge,
+    normalize_implementation_step,
+)
 from aeo_eval.data.prompt_loader import load_prompts
 from aeo_eval.engine.factory import available_engines, create_engine
 from aeo_eval.runner.evaluator import RunOptions
@@ -505,21 +514,24 @@ def fetch_recommendations_for_approval(run_id):
     return recommendations
 
 
-def fetch_recommendation_evidence(rec_id):
-    """Fetch evidence details for a recommendation (gap information, affected pages)."""
+def fetch_recommendation_evidence_bulk(rec_ids):
+    """Fetch evidence rows for many recommendations in one query, keyed by id."""
+    if not rec_ids:
+        return {}
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+    placeholders = ",".join("?" * len(rec_ids))
+    cursor.execute(f"""
         SELECT r.id, r.gap_id, r.problem, r.evidence_summary, r.affected_pages,
                g.topic, g.gap_type, g.striim_visibility, g.top_competitor_visibility,
                g.top_competitor_name, g.priority as gap_priority, g.confidence
         FROM recommendations r
         JOIN gaps g ON r.gap_id = g.id
-        WHERE r.id = ?
-    """, (rec_id,))
-    evidence = cursor.fetchone()
+        WHERE r.id IN ({placeholders})
+    """, list(rec_ids))
+    rows = cursor.fetchall()
     conn.close()
-    return evidence
+    return {row['id']: row for row in rows}
 
 
 def format_metric_card(label, value, change=None, subtext=None):
@@ -717,6 +729,7 @@ def render_gaps_recommendations_view(run):
             ]
 
         if filtered_recs:
+            evidence_by_rec = fetch_recommendation_evidence_bulk([r['id'] for r in filtered_recs])
             for rec in filtered_recs:
                 status_color = {
                     'draft': '',
@@ -730,14 +743,70 @@ def render_gaps_recommendations_view(run):
                     col1, col2 = st.columns([4, 1])
 
                     with col1:
-                        st.markdown(f"**{rec['recommended_action'][:80]}...**")
+                        st.markdown(f"**{rec['recommended_action']}**")
                         st.caption(f"Priority: {rec['priority']}/10 | "
                                  f"Effort: {rec['estimated_effort']} pts")
-                        st.caption(rec['problem'][:150] + "...")
 
                     with col2:
                         status_label = rec['status'].replace('_', ' ').title()
                         st.caption(f"{status_color.get(rec['status'], '?')} {status_label}")
+
+                    # Full problem statement
+                    st.markdown("**Problem:**")
+                    st.markdown(rec['problem'])
+
+                    # Evidence summary
+                    if rec['evidence_summary']:
+                        st.markdown("**Evidence:**")
+                        st.markdown(rec['evidence_summary'])
+
+                    # Expandable section for full details
+                    with st.expander("View Full Details"):
+                        evidence = evidence_by_rec.get(rec['id'])
+
+                        # Gap context
+                        if evidence:
+                            st.markdown("**Gap Context:**")
+                            st.markdown(f"{evidence['topic']} - {evidence['gap_type'].title()}")
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.caption(f"Striim Visibility: {evidence['striim_visibility']:.1%}")
+                            with col2:
+                                st.caption(f"Competitor ({evidence['top_competitor_name']}): {evidence['top_competitor_visibility']:.1%}")
+                            with col3:
+                                st.caption(f"Confidence: {evidence['confidence'].title()}")
+
+                        # Affected pages
+                        if rec['affected_pages']:
+                            try:
+                                affected = json.loads(rec['affected_pages'])
+                                if affected:
+                                    st.markdown("**Affected Pages:**")
+                                    for page in affected:
+                                        st.caption(f"- {page}")
+                            except (json.JSONDecodeError, TypeError):
+                                st.caption(f"Affected Pages: {rec['affected_pages']}")
+
+                        # Implementation steps
+                        impl_steps = rec['implementation_steps'] if 'implementation_steps' in rec.keys() else None
+                        if impl_steps:
+                            st.markdown("**Implementation Steps:**")
+                            render_implementation_steps(impl_steps)
+
+                        # Metadata
+                        st.markdown("**Metadata:**")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.caption(f"ID: {rec['id']}")
+                            st.caption(f"Gap ID: {rec['gap_id']}")
+                            st.caption(f"Created: {rec['created_timestamp']}")
+                        with col2:
+                            if 'suggested_owner' in rec.keys() and rec['suggested_owner']:
+                                st.caption(f"Suggested Owner: {rec['suggested_owner']}")
+                            if 'measurement_plan' in rec.keys() and rec['measurement_plan']:
+                                st.caption(f"Measurement Plan: {rec['measurement_plan']}")
+                            if 'approved_by' in rec.keys() and rec['approved_by']:
+                                st.caption(f"Approved By: {rec['approved_by']}")
         else:
             st.info("No recommendations match the selected filters.")
     else:
@@ -1113,6 +1182,45 @@ def render_website_access_view(run):
         st.info("No website check data available yet. Run evaluations to see website access information.")
 
 
+def render_implementation_steps(steps_json):
+    """Render implementation steps from JSON."""
+    if not steps_json:
+        st.info("No implementation steps available.")
+        return
+
+    try:
+        if isinstance(steps_json, str):
+            steps = json.loads(steps_json)
+        else:
+            steps = steps_json
+
+        if not isinstance(steps, list):
+            st.info("Invalid implementation steps format.")
+            return
+
+        for i, raw_step in enumerate(steps, 1):
+            # Article recs store dict steps, social media recs store
+            # plain strings; normalize both to one shape.
+            step = normalize_implementation_step(raw_step, i)
+
+            col1, col2, col3 = st.columns([3, 1, 1])
+            with col1:
+                st.caption(f"**{i}. {step['step']}**")
+                if step['notes']:
+                    st.caption(f"__{step['notes']}__")
+            with col2:
+                if step['effort']:
+                    effort_color = get_effort_color(step['effort'])
+                    st.caption(f"<span style='color: {effort_color}; font-weight: 600;'>**{step['effort']}**</span>", unsafe_allow_html=True)
+            with col3:
+                if step['owner']:
+                    st.caption(f"_{step['owner']}_")
+    except json.JSONDecodeError:
+        st.error("Failed to parse implementation steps JSON.")
+    except Exception as e:
+        st.error(f"Error rendering steps: {str(e)}")
+
+
 def render_recommendations_view(run):
     """Render the Recommendations management view."""
     st.markdown("<h2 style='color: #ffffff; margin-bottom: 1.5rem; font-weight: 600;'>Recommendations</h2>", unsafe_allow_html=True)
@@ -1161,17 +1269,25 @@ def render_recommendations_view(run):
         'implemented': ''
     }
 
+    evidence_by_rec = fetch_recommendation_evidence_bulk([r['id'] for r in filtered_recs])
+
     for rec in filtered_recs:
-        evidence = fetch_recommendation_evidence(rec['id'])
+        evidence = evidence_by_rec.get(rec['id'])
 
         with st.container(border=True):
-            # Header with status badge and priority
-            col1, col2, col3 = st.columns([3, 1, 1])
+            # Header with status badge, platform badge, and priority
+            col1, col2, col3 = st.columns([2.5, 1, 1])
 
             with col1:
                 status_badge = status_colors.get(rec['status'], '❓')
                 status_label = rec['status'].replace('_', ' ').title()
-                st.markdown(f"**{status_label}**")
+                # Display platform badge if platform exists
+                platform = rec['platform'] if 'platform' in rec.keys() else None
+                platform_badge = get_platform_badge(platform)
+                if platform_badge:
+                    st.markdown(f"**{status_label}** {platform_badge}", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"**{status_label}**")
 
             with col2:
                 priority_num = rec['priority'] or 0
@@ -1179,8 +1295,9 @@ def render_recommendations_view(run):
 
             with col3:
                 effort_num = rec['estimated_effort'] or 0
-                effort_labels = {1: 'Low', 2: 'Medium', 3: 'High'}
-                st.markdown(f"**Effort:** {effort_labels.get(effort_num, 'Unknown')}")
+                effort_label = EFFORT_LABELS.get(effort_num, 'Unknown')
+                effort_color = get_effort_color(effort_num)
+                st.markdown(f"<span style='color: {effort_color}; font-weight: 600;'>**Effort:** {effort_label}</span>", unsafe_allow_html=True)
 
             st.divider()
 
@@ -1215,6 +1332,12 @@ def render_recommendations_view(run):
                             st.caption(f"... and {len(affected) - 5} more")
                 except (json.JSONDecodeError, TypeError):
                     st.caption(f"Affected Pages: {rec['affected_pages'][:100]}")
+
+            # Implementation steps - expandable section
+            impl_steps = rec['implementation_steps'] if 'implementation_steps' in rec.keys() else None
+            if impl_steps:
+                with st.expander("Implementation Steps", expanded=False):
+                    render_implementation_steps(impl_steps)
 
             # Action buttons
             st.divider()
@@ -1333,6 +1456,9 @@ def render_recommendations_view(run):
                     st.caption(f"**Created:** {rec['created_timestamp']}")
                     if rec['approved_by']:
                         st.caption(f"**Approved By:** {rec['approved_by']}")
+                    platform = rec['platform'] if 'platform' in rec.keys() else None
+                    if platform:
+                        st.caption(f"**Platform:** {platform.title()}")
 
                 with details_col2:
                     if rec['measurement_plan']:
@@ -1341,6 +1467,23 @@ def render_recommendations_view(run):
                         st.caption(f"**Suggested Owner:** {rec['suggested_owner']}")
                     if rec['review_notes']:
                         st.caption(f"**Review Notes:** {rec['review_notes']}")
+
+                # Show full implementation steps in details view
+                impl_steps = rec['implementation_steps'] if 'implementation_steps' in rec.keys() else None
+                if impl_steps:
+                    st.markdown("**Full Implementation Steps:**")
+                    render_implementation_steps(impl_steps)
+
+                # Show templates applied
+                templates_applied = rec['templates_applied'] if 'templates_applied' in rec.keys() else None
+                if templates_applied:
+                    st.markdown("**Templates Applied:**")
+                    try:
+                        templates = json.loads(templates_applied)
+                        for template_id in templates:
+                            st.caption(f"- {template_id}")
+                    except (json.JSONDecodeError, TypeError):
+                        st.caption(f"Templates: {rec['templates_applied']}")
 
 
 def render_cost_view():
@@ -1362,7 +1505,7 @@ def render_cost_view():
         st.metric("Daily Limit", f"${budget_status['daily_limit']:.2f}")
     with col3:
         remaining = budget_status['remaining']
-        remaining_color = "🟢" if remaining > 0 else "🔴"
+        remaining_color = "" if remaining > 0 else "🔴"
         st.metric(f"{remaining_color} Remaining", f"${remaining:.2f}")
     with col4:
         percent_used = budget_status['percent_used']
@@ -2103,7 +2246,7 @@ def main():
 
     /* Input fields text */
     input, textarea, select {
-        color: #0f172a !important;
+        color: #ffffff !important;
     }
 
     /* Table text */
@@ -2296,7 +2439,7 @@ def main():
         }
         </style>
         """, unsafe_allow_html=True)
-        if st.button("⚙️ Configure & Run", key="open_eval_config", use_container_width=True, help="Run a new evaluation"):
+        if st.button("Configure & Run", key="open_eval_config", use_container_width=True, help="Run a new evaluation"):
             st.session_state.show_eval_config = not st.session_state.get("show_eval_config", False)
             st.rerun()
 
@@ -2389,25 +2532,72 @@ def main():
                     key="run_priority"
                 )
 
-            if st.button("Start Evaluation", type="primary", use_container_width=True):
-                with st.spinner(f"Running evaluation with {engine_choice}..."):
-                    result = run_evaluation(
-                        engine_name=engine_choice,
-                        num_prompts=num_prompts,
-                        topic=topic_filter,
-                        priority=priority_filter
+            eval_job_running = (
+                st.session_state.get("eval_job") is not None
+                and st.session_state.eval_job["thread"].is_alive()
+            )
+            if st.button(
+                "Start Evaluation", type="primary", use_container_width=True,
+                disabled=eval_job_running,
+            ):
+                # Run the pipeline in a background thread so the page
+                # keeps rendering; a 60-question run takes many minutes
+                # and a blocking spinner froze the whole dashboard.
+                job = {
+                    "engine": engine_choice,
+                    "num_prompts": num_prompts,
+                    "started": datetime.now().isoformat(),
+                    "result": None,
+                }
+
+                def _run_in_background(job=job, engine=engine_choice,
+                                       n=num_prompts, topic=topic_filter,
+                                       priority=priority_filter):
+                    job["result"] = run_evaluation(
+                        engine_name=engine,
+                        num_prompts=n,
+                        topic=topic,
+                        priority=priority,
                     )
 
-                    if "error" in result:
-                        st.error(f"Evaluation failed: {result['error']}")
-                    else:
-                        st.success(f"✓ Evaluation complete! Run ID: {result.get('run_id', 'unknown')[-8:]}")
-                        st.balloons()
-                        st.rerun()
+                thread = threading.Thread(target=_run_in_background, daemon=True)
+                thread.start()
+                # Store the same dict the thread mutates, so job["result"]
+                # is visible here once the thread finishes.
+                job["thread"] = thread
+                st.session_state.eval_job = job
+                st.rerun()
 
         st.divider()
 
     st.divider()
+
+    # Live progress for a background evaluation run.
+    if st.session_state.get("eval_job"):
+        job = st.session_state.eval_job
+        if job["thread"].is_alive():
+            conn = get_db_connection()
+            try:
+                progress = fetch_run_progress(conn, job["started"])
+            finally:
+                conn.close()
+            st.info(
+                f"⏳ Evaluation running ({job['engine']}, "
+                f"{job['num_prompts']} questions) — "
+                + describe_progress(progress, job["num_prompts"])
+            )
+            time.sleep(4)
+            st.rerun()
+        else:
+            result = job.get("result") or {}
+            if "error" in result:
+                st.error(f"Evaluation failed: {result['error']}")
+            else:
+                st.success(
+                    f"✓ Evaluation complete! Run ID: "
+                    f"{result.get('run_id', 'unknown')[-8:]}"
+                )
+            del st.session_state["eval_job"]
 
     # Get the run for display (after config panel handles selection)
     run = fetch_run_by_id(all_runs[st.session_state.selected_run_idx]['run_id'])

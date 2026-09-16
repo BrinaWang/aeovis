@@ -1,0 +1,136 @@
+{
+  "personas": {
+    "Head of Data / CDO": {
+      "title": "Head of Data / Chief Data Officer (CDO)",
+      "description": "Responsible for the company's data strategy, governance, and the overall value derived from data assets",
+      "company_sizes": ["Mid-market", "Enterprise"],
+      "industries": ["Financial Services", "Healthcare", "Retail", "Technology"],
+      "key_concerns": [
+        "Demonstrating AI ROI and business value to executive leadership",
+        "Reducing data silos and fragmentation to enable end-to-end analytics and AI",
+        "Ensuring data governance, quality, and compliance for all AI workloads"
+      ],
+      "risk_tolerance": "Low",
+      "roi_focus": "Measurable business value and ROI from AI initiatives",
+      "decision_timeline": "6-12 months",
+      "evaluation_criteria": [
+        "Unified platform for data quality, governance, and delivery",
+        "Governance and compliance capabilities",
+        "Scalability of the data foundation",
+        "Ability to demonstrate measurable ROI to the board"
+      ],
+      "core_need": "Establish a unified, trusted, and scalable data foundation that accelerates business value from AI initiatives and delivers measurable ROI to the board",
+      "why_striim": "Striim provides a unified, intelligent data platform, giving the CDO a single platform to control data quality, governance, and delivery for all AI projects. This transforms data from a liability into a strategic asset for AI."
+    },
+    "VP of AI": {
+      "title": "VP of AI / Applied AI",
+      "description": "Business leader responsible for defining and executing the company's AI strategy to drive business outcomes; the AI champion and P&L owner",
+      "company_sizes": ["Mid-market", "Enterprise"],
+      "industries": ["Any"],
+      "key_concerns": [
+        "Demonstrating clear, quantifiable ROI from AI projects",
+        "Accelerating the time-to-market for new AI-powered products and services",
+        "Establishing a scalable, repeatable framework for AI development and deployment"
+      ],
+      "risk_tolerance": "Medium",
+      "roi_focus": "Quantifiable ROI and time-to-market for AI products",
+      "decision_timeline": "3-6 months",
+      "evaluation_criteria": [
+        "Access to fresh, high-quality, governed data for models",
+        "Speed of moving AI pilots into production",
+        "Repeatability and scalability of the AI framework",
+        "Measurable business outcomes"
+      ],
+      "core_need": "Rapidly deliver measurable business value from AI initiatives and scale successful AI pilots into production",
+      "why_striim": "Striim provides the foundational infrastructure that turns AI concepts into reality. By ensuring models have access to fresh, high-quality, governed data, Striim helps the VP of AI achieve their mandate and move from AI ambition to tangible business outcomes."
+    },
+    "VP of Engineering / CTO": {
+      "title": "VP of Engineering / CTO",
+      "description": "Responsible for technology strategy, platform selection, and the operational reliability of data systems",
+      "company_sizes": ["Small", "Mid-market", "Enterprise"],
+      "industries": ["Any"],
+      "key_concerns": [
+        "Achieving sub-second latency for real-time applications and AI",
+        "Ensuring enterprise-grade availability and elastic scalability",
+        "Reducing the engineering burden and total cost of ownership of managing complex data pipelines"
+      ],
+      "risk_tolerance": "Low",
+      "roi_focus": "Reduced operational overhead and total cost of ownership",
+      "decision_timeline": "3-6 months",
+      "evaluation_criteria": [
+        "Performance and latency (sub-second)",
+        "Availability, resilience, and elastic scalability",
+        "Fully managed SaaS vs. DIY maintenance burden",
+        "Features like CDC and automated schema evolution"
+      ],
+      "core_need": "Deploy and manage a real-time data infrastructure that is high-performance, resilient, and reduces operational overhead without requiring extensive custom development",
+      "why_striim": "Striim's fully managed SaaS platform with features like Change Data Capture (CDC), automated schema evolution, and elastic scalability allows them to operationalize AI without needing a large, specialized team to build and maintain a DIY stack."
+    },
+    "Data Scientist": {
+      "title": "Data Scientist",
+      "description": "Builds, trains, and deploys machine learning models",
+      "company_sizes": ["Small", "Mid-market", "Enterprise"],
+      "industries": ["Any"],
+      "key_concerns": [
+        "Eliminating data staleness and manual data preparation time",
+        "Accessing diverse data sources in a single, unified stream",
+        "Data accuracy and quality for model training and inference"
+      ],
+      "risk_tolerance": "Medium",
+      "roi_focus": "Time saved on data preparation, model quality",
+      "decision_timeline": "1-3 months",
+      "evaluation_criteria": [
+        "Data freshness and quality of streams",
+        "Breadth of source connectivity in a unified stream",
+        "In-stream enrichment (vector embeddings, anomaly detection)",
+        "Ease of integration with model workflows"
+      ],
+      "core_need": "Access fresh, high-quality, and context-rich data streams for model training and inference without spending time on data plumbing",
+      "why_striim": "Striim's platform delivers decision-ready data streams, allowing data scientists to focus on model development rather than data plumbing. Its in-stream AI agents for vector embeddings and anomaly detection enrich the data for direct use by AI models."
+    },
+    "AI Product Manager": {
+      "title": "AI Product Manager",
+      "description": "Owns intelligent applications and AI-powered product features from concept to launch",
+      "company_sizes": ["Small", "Mid-market", "Enterprise"],
+      "industries": ["Any"],
+      "key_concerns": [
+        "Time-to-market for AI-powered features",
+        "Real-time data availability for product experiences",
+        "Governing data for compliance and accuracy in customer-facing AI"
+      ],
+      "risk_tolerance": "Medium",
+      "roi_focus": "Faster feature delivery, product adoption and outcomes",
+      "decision_timeline": "1-3 months",
+      "evaluation_criteria": [
+        "Speed from prototype to production",
+        "Reliability of real-time data feeding the product",
+        "Governance and compliance for customer-facing AI",
+        "Reduced dependency on engineering for data access"
+      ],
+      "core_need": "Ship real-time, AI-powered product features quickly on data that is fresh, governed, and production-ready",
+      "why_striim": "Striim delivers decision-ready, governed data streams that let product teams ship real-time AI features faster, without waiting on custom pipeline work from engineering."
+    },
+    "CISO": {
+      "title": "Security & Compliance Officer (CISO)",
+      "description": "Ensures data privacy, security, and compliance across the organization's IT infrastructure",
+      "company_sizes": ["Mid-market", "Enterprise"],
+      "industries": ["Financial Services", "Healthcare", "Retail", "Technology"],
+      "key_concerns": [
+        "Preventing data breaches and unauthorized access to production data",
+        "Meeting regulatory requirements (e.g., GDPR, HIPAA, PCI, EU AI Act)",
+        "Maintaining a continuous audit trail for data lineage and validation"
+      ],
+      "risk_tolerance": "Low",
+      "roi_focus": "Risk reduction and audit readiness",
+      "decision_timeline": "3-6 months",
+      "evaluation_criteria": [
+        "In-flight sensitive data detection and masking",
+        "Regulatory compliance coverage",
+        "Continuous data validation and audit trail",
+        "Protection of production data from exposure"
+      ],
+      "core_need": "Ensure data privacy, security, and compliance across all AI and data pipelines, especially with sensitive data",
+      "why_striim": "Striim's AI-powered data governance agents (e.g., Sentinel AI) detect and mask sensitive data in flight, ensuring a cleansed and protected operational replica is delivered to AI systems without exposing production data. The Validata feature provides continuous data validation for audit readiness."
+    }
+  }
+}

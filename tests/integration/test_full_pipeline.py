@@ -89,3 +89,56 @@ def test_full_pipeline_persists_every_stage(tmp_path):
         assert overall_metrics == 1
     finally:
         conn.close()
+
+
+def test_run_status_is_processing_during_post_stages_and_final_at_end(tmp_path, monkeypatch):
+    """The run must not read as 'completed' while gaps/recommendations
+    are still being generated — that status fools every consumer
+    (dashboard, humans) into thinking the pipeline is done.
+    """
+    from aeo_eval.recommendations.generator import RecommendationGenerator
+
+    engine = MockEngine()
+    db_path = str(tmp_path / "pipeline.db")
+    orchestrator = AEOPipelineOrchestrator(engine, {"db_path": db_path})
+
+    seen = {}
+    original = RecommendationGenerator.generate_for_run
+
+    def spying_generate_for_run(self, run_id, use_llm=True):
+        conn = sqlite3.connect(db_path)
+        try:
+            seen["status_during_recommendations"] = conn.execute(
+                "SELECT status FROM evaluation_runs WHERE run_id = ?", (run_id,)
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        return original(self, run_id, use_llm=use_llm)
+
+    monkeypatch.setattr(
+        RecommendationGenerator, "generate_for_run", spying_generate_for_run
+    )
+
+    prompts = [
+        Prompt(
+            id="test-001",
+            prompt="What is Striim and how does it compare for Oracle CDC?",
+            topic="Oracle CDC",
+            persona="Architect",
+            intent="Educational",
+            priority="High",
+        )
+    ]
+    result = orchestrator.run_full_pipeline(prompts)
+
+    assert seen["status_during_recommendations"] == "processing"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        final_status = conn.execute(
+            "SELECT status FROM evaluation_runs WHERE run_id = ?",
+            (result["run_id"],),
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert final_status == "completed"

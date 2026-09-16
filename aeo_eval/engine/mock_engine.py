@@ -22,6 +22,10 @@ class MockEngine(BaseEngine):
     name = "mock"
     model_name = "mock-v1"
 
+    def estimate_cost(self, prompt_tokens: int, completion_tokens: int) -> float:
+        """Mock engine has zero cost since it makes no API calls."""
+        return 0.0
+
     def run(self, prompt_text: str) -> RunResult:
         return RunResult(
             run_id=f"{self.name}-{uuid.uuid4().hex[:12]}",
@@ -33,7 +37,7 @@ class MockEngine(BaseEngine):
             response_text=f"Mock answer for prompt: {prompt_text}",
             error=None,
             latency_ms=150,
-            estimated_cost=0.01,
+            estimated_cost=0.0,
         )
 
 
@@ -42,6 +46,10 @@ class RandomMockEngine(BaseEngine):
 
     name = "random-mock"
     model_name = "random-mock-v1"
+
+    def estimate_cost(self, prompt_tokens: int, completion_tokens: int) -> float:
+        """Mock engine has zero cost since it makes no API calls."""
+        return 0.0
 
     # Pool of realistic response templates with brands and citations
     RESPONSE_POOL = [
@@ -199,7 +207,6 @@ class RandomMockEngine(BaseEngine):
         # Simulate realistic latency (100-350ms)
         latency_ms = random.randint(100, 350)
 
-        # Calculate cost
         actual_cost = self.estimate_cost(input_tokens, output_tokens)
 
         return RunResult(

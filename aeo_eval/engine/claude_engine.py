@@ -55,6 +55,7 @@ class ClaudeEngine(BaseEngine):
         self.client = Anthropic(api_key=api_key)
         self.model_name = self.config.get("model_name", "claude-opus-5")
         self.timeout = self.config.get("timeout_seconds", 60)
+        self.max_tokens = self.config.get("max_tokens", 8000)
 
         # Initialize retry manager
         self._retry_manager = RetryManager(self.get_retry_policy())
@@ -242,7 +243,7 @@ class ClaudeEngine(BaseEngine):
         def _call_claude_structured():
             return self.client.messages.create(
                 model=self.model_name,
-                max_tokens=2000,
+                max_tokens=self.max_tokens,
                 messages=[{"role": "user", "content": prompt_text}],
                 output_config={
                     "format": {"type": "json_schema", "schema": schema}
@@ -263,7 +264,23 @@ class ClaudeEngine(BaseEngine):
         try:
             data = json.loads(response_text)
         except json.JSONDecodeError:
-            logger.warning(f"Failed to parse structured response as JSON: {response_text}")
+            # The usual cause is truncation: the model hit max_tokens
+            # mid-document, so the JSON is incomplete. Say so plainly —
+            # callers fall back to empty/default fields and the loss is
+            # otherwise invisible.
+            if getattr(message, "stop_reason", None) == "max_tokens":
+                logger.warning(
+                    f"Structured response truncated at max_tokens="
+                    f"{self.max_tokens} ({output_tokens} output tokens); "
+                    f"raise providers.{self.name}.max_tokens in config.yaml. "
+                    f"Partial response: {response_text[:500]}..."
+                )
+            else:
+                logger.warning(
+                    f"Failed to parse structured response as JSON "
+                    f"(stop_reason={getattr(message, 'stop_reason', None)}): "
+                    f"{response_text[:500]}"
+                )
             data = {"raw_response": response_text}
 
         return StructuredCallResult(
