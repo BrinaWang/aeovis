@@ -1,3 +1,21 @@
+"""Module 3 entry point: turn one raw answer into an analysis dict.
+
+``extract_response`` is a hybrid: brand *presence* is decided by a
+deterministic substring match (``extract_brand_mentions``) and is the
+source of truth for ``striim_mentioned``; positions, claims, sentiment
+and confidence come from a schema-constrained LLM call
+(``llm_extractor.extract_with_claude``); citations are every
+``http(s)://`` URL in the answer text, de-duplicated in order. If the LLM
+call fails outright the function degrades to brands-only with
+``confidence=0.0`` and ``flagged_for_review=True`` rather than raising,
+so a single bad extraction never fails an evaluation run.
+
+The returned dict is consumed by ``Evaluator._extract_and_store_analysis``,
+which maps it onto ``ResponseAnalysisOutput`` / the ``response_analysis``
+table. Note the persisted ``brands_found`` is the flat list of names from
+the substring match, not the LLM's positioned competitor objects.
+"""
+
 from __future__ import annotations
 
 import re

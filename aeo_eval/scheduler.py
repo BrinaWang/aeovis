@@ -32,7 +32,16 @@ class ScheduledRunConfig:
 
 
 class ScheduleManager:
-    """Manages scheduled evaluation runs using APScheduler."""
+    """Manages scheduled evaluation runs using APScheduler.
+
+    State is held in memory only: ``scheduled_runs`` is a plain dict and the
+    ``BackgroundScheduler`` uses its default in-memory job store, so every
+    schedule disappears when the process exits. A scheduled job executes by
+    building an ``argparse.Namespace`` and calling ``cli.cmd_run`` in the
+    scheduler thread, i.e. the exact same code path as the command line.
+    Nothing constructs this class yet: the ``schedule`` CLI subcommand is a
+    stub, so scheduling is library-ready but not wired to any entry point.
+    """
 
     def __init__(self):
         """Initialize the schedule manager."""

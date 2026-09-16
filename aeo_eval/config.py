@@ -1,3 +1,30 @@
+"""Typed configuration for the platform.
+
+Configuration is resolved once, at import time, into the module-level
+``config`` singleton (a :class:`Config`). Resolution order:
+
+1. ``$CONFIG_PATH`` if set, else ``<repo>/config.yaml``.
+2. If that file is missing or fails validation, the Pydantic defaults
+   declared on each model below (a warning is printed on failure).
+3. API keys are never read from YAML in practice: the ``providers``
+   validator overlays ``ANTHROPIC_API_KEY`` / ``OPENAI_API_KEY`` / ... from
+   the environment onto the matching provider section. Note the overlay
+   only touches providers that already have a section in the YAML (or in
+   the defaults); an env var for an unlisted provider is ignored.
+
+Every consumer imports ``config`` from here and reads it at call time,
+so the dashboard can mutate ``config.general.cost_limit_*`` in memory (it
+also rewrites ``config.yaml``) and the next pipeline run honours it
+without a restart. Tests patch the same object via ``monkeypatch`` (see
+``tests/conftest.py``).
+
+``PROVIDERS`` is the engine registry consumed by
+``aeo_eval.engine.factory.create_engine``: a provider name maps to a
+``"module:ClassName"`` import string. A provider may have a section in
+``config.providers`` without an engine implementation (gemini, grok and
+perplexity today); such names are not runnable.
+"""
+
 from __future__ import annotations
 
 import os
@@ -9,7 +36,9 @@ from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Provider registry for engine implementations
+# Provider registry for engine implementations. Key = CLI/dashboard engine
+# name, value = "importable.module:ClassName". Only names listed here can
+# be instantiated; see the module docstring.
 PROVIDERS = {
     "mock": "aeo_eval.engine.mock_engine:MockEngine",
     "random-mock": "aeo_eval.engine.mock_engine:RandomMockEngine",

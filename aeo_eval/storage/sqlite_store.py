@@ -1,3 +1,23 @@
+"""SQLite persistence layer.
+
+Design in one paragraph: the schema lives in ``sqlite_schema.sql`` and is
+applied with ``executescript`` on every ``init_db`` (all DDL is
+``IF NOT EXISTS``); the only migration logic in Python is
+``apply_schema_migrations``, which ``ALTER TABLE``s columns the script
+cannot add to a pre-existing table. ``SQLiteStore`` opens a **fresh
+connection per method call** and commits before returning, so it is safe
+to call from the evaluator's worker threads and from the Streamlit
+process concurrently (SQLite serialises writers; readers never block).
+The one place a long-lived connection is used is the orchestrator, which
+holds one open for the whole pipeline so a ``:memory:`` database survives
+between the store's short-lived connections (see ``resolve_sqlite_target``).
+
+Structured columns (``brands_found``, ``claims``, ``citations``,
+``affected_pages``, ``implementation_steps``, ...) are JSON text; the
+write path serialises with ``_json_field`` and the read path parses with
+``_parse_json_field``. Booleans are stored as 0/1 integers.
+"""
+
 from __future__ import annotations
 
 import sqlite3
@@ -98,6 +118,33 @@ def _recommendation_row(recommendation: Dict) -> tuple:
 
 
 class SQLiteStore:
+    """Thin, connection-per-call data access object over the SQLite schema.
+
+    Method families:
+
+    * lifecycle: ``init_db``, ``apply_schema_migrations``, ``apply_retention``
+    * Module 2/3 writes: ``save_run`` (also creates a placeholder
+      ``evaluation_runs`` row), ``save_evaluation_run`` (upserts the real
+      totals and derives ``status``), ``save_analysis``, ``save_prompts``
+    * Module 4/5/6/7/8/9 writes: ``save_metrics``, ``save_citations``
+      (upsert by ``normalized_url`` + ``citation_occurrences`` rows),
+      ``store_website_checks``, ``store_crawler_logs``, ``save_gap``,
+      ``save_recommendation(s)``
+    * run status/cost: ``get_run_status_and_cost``, ``set_run_status``,
+      ``add_to_run_cost``, ``get_today_cost`` (drives the daily limit)
+    * recommendation workflow: ``update_recommendation_status``,
+      ``update_recommendation`` (allow-listed fields), ``approve_/
+      reject_recommendation``, ``get_recommendation``
+    * cost reporting used by the dashboard: ``get_cost_by_*``,
+      ``get_cost_trends``, ``get_all_runs_cost_detail``
+
+    ``evaluation_runs.status`` lifecycle: ``save_run`` seeds the row with
+    the first result's status, ``save_evaluation_run`` overwrites it with
+    ``completed`` / ``partial_failure`` / ``failed``, the orchestrator then
+    sets ``processing`` while Modules 4-9 run and restores the evaluation
+    verdict in a ``finally``.
+    """
+
     def __init__(self, db_path: str | Path):
         self.db_path, self._uri = resolve_sqlite_target(db_path)
         self._schema_path = Path(__file__).parent / "sqlite_schema.sql"
@@ -277,6 +324,14 @@ class SQLiteStore:
         Args:
             result: RunResult object containing evaluation execution data
         """
+        # The placeholder row must carry the batch's ISO-8601 timestamp, the
+        # same value save_evaluation_run writes later. SQLite's
+        # datetime('now') yields "YYYY-MM-DD HH:MM:SS" (UTC), and a space
+        # sorts before "T", so that form compares *less than* any ISO
+        # string of the same date: the dashboard's progress poll
+        # (timestamp >= <ISO start>) could not see a run until it finished.
+        batch_timestamp = (result.run_timestamp or datetime.now()).isoformat()
+
         with self._connect() as conn:
             conn.execute("PRAGMA foreign_keys = ON")
 
@@ -285,9 +340,9 @@ class SQLiteStore:
                 """
                 INSERT OR IGNORE INTO evaluation_runs
                 (run_id, timestamp, engine, model, num_prompts, status)
-                VALUES (?, datetime('now'), ?, ?, 1, ?)
+                VALUES (?, ?, ?, ?, 1, ?)
                 """,
-                (result.run_batch_id, result.engine, result.model, result.status),
+                (result.run_batch_id, batch_timestamp, result.engine, result.model, result.status),
             )
 
             # Insert into raw_responses table
@@ -1038,6 +1093,33 @@ class SQLiteStore:
                 conn.rollback()
                 logger.error(f"Error storing crawler logs: {e}")
                 raise
+
+    def create_run_record(
+        self,
+        run_id: str,
+        engine: str,
+        model: str = "n/a",
+        num_prompts: int = 0,
+        status: str = "completed",
+    ) -> None:
+        """Insert a bare ``evaluation_runs`` row (no-op if it already exists).
+
+        Used by flows that produce run-scoped rows without evaluating any
+        prompts, such as the dashboard's standalone Module 6 checks:
+        ``website_checks.run_id`` has an enforced foreign key, so a parent
+        row must exist before those checks can be stored.
+        """
+        with self._connect() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO evaluation_runs
+                (run_id, timestamp, engine, model, num_prompts, status, cost)
+                VALUES (?, ?, ?, ?, ?, ?, 0.0)
+                """,
+                (run_id, datetime.now().isoformat(), engine, model, num_prompts, status),
+            )
+            conn.commit()
 
     def get_run_status_and_cost(self, run_id: str) -> tuple[Optional[str], float]:
         """Get one evaluation run's status and accumulated cost.

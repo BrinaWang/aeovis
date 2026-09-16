@@ -1,3 +1,26 @@
+"""Engine contract shared by every answer-engine implementation.
+
+An engine plays two roles in the pipeline:
+
+* **Answer engine** (``run``): the system under evaluation. It receives a
+  buyer question verbatim and returns a ``RunResult`` carrying the raw
+  answer text, token usage, cost, latency and a status. Implementations
+  must never raise from ``run`` for provider errors; they return a
+  ``RunResult`` with ``status`` in {``failed``, ``rate_limited``,
+  ``timeout``} so the evaluator can persist every outcome.
+* **Analyzer / structured-output engine** (``run_with_structured_output``):
+  a JSON-schema-constrained call used by Module 3 extraction and Module 9
+  recommendation generation. It returns a ``StructuredCallResult`` (parsed
+  dict plus usage and cost) and *may* raise; callers wrap it.
+
+The base class owns the cross-cutting concerns so subclasses only wire
+the provider SDK: per-1k-token cost lookup (``get_token_costs`` /
+``estimate_cost``), a lazily built ``RetryPolicy`` and a lazily built
+token-bucket ``RateLimiter``, all driven by the plain ``config`` dict
+handed in by ``aeo_eval.engine.factory.create_engine`` (which is a
+``ProviderConfig.model_dump()``).
+"""
+
 from __future__ import annotations
 
 import logging
@@ -13,7 +36,13 @@ logger = logging.getLogger(__name__)
 
 
 class BaseEngine(ABC):
-    """Abstract base class for AI answer engines."""
+    """Abstract base class for AI answer engines.
+
+    Class attributes ``name`` (the registry key, e.g. ``"claude"``) and
+    ``model_name`` are overridden by subclasses; ``name`` is what the
+    evaluator and orchestrator branch on (mock detection, Claude reuse
+    for recommendations), so it must match the ``PROVIDERS`` key.
+    """
 
     name: str = "base"
     model_name: str = "base-model"

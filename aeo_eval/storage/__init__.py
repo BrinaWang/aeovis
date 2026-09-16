@@ -1,3 +1,11 @@
+"""Storage package. ``SQLiteStore`` is the only class; see sqlite_store.py.
+
+The module-level functions below forward to the *unbound* ``SQLiteStore``
+methods, so the first positional argument must be a ``SQLiteStore``
+instance (``save_analysis(store, analysis)``). Nothing in the codebase
+calls them today; prefer ``SQLiteStore(...).method(...)`` directly.
+"""
+
 from .sqlite_store import SQLiteStore
 
 __all__ = [

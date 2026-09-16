@@ -2,17 +2,25 @@
 - then go into detail abt the implementation
 - change run names
 
+- how to run the striim reddit... 
+- g2, gigaom, trustradar 
+
+
+-multi topic things, person questions 
+
 - cloudfare *** 
 - copy the other websites
 - robots.txt vs llms.txt
 - google gemini note taking
+- update questions and personas, meet w simon
 
 - want to swap out the questinos to keep up with monthly trends
 - how to automate? maybe use questions to calude and code a text extracter...
 - review questions and personas, make sure they are accurate and the repository makes sense
 review the implementation... 
+- fix the llm reccs
 cloudflare blocking
-
+- want to add like. top 5 reccomendations that r high priority as warnings
 
 not implemented: dashboard for approval
 

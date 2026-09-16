@@ -81,6 +81,33 @@ def test_describe_before_run_row_exists():
     assert "start" in describe_progress(None, requested=5).lower()
 
 
+def test_placeholder_run_row_is_visible_to_progress_poll(tmp_path):
+    """The dashboard finds a run by ``timestamp >= <ISO start>`` while it is
+    still answering, i.e. when only save_run's placeholder row exists. That
+    row must therefore carry the batch's ISO timestamp, not SQLite's
+    space-separated UTC ``datetime('now')`` (which sorts before any ISO
+    string of the same date)."""
+    from datetime import datetime
+    from aeo_eval.models.result import RunResult
+    from aeo_eval.storage.sqlite_store import SQLiteStore
+
+    db = str(tmp_path / "t.db")
+    store = SQLiteStore(db)
+    store.init_db()
+    batch_started = datetime(2030, 1, 1, 12, 0, 0)
+    store.save_run(RunResult(
+        run_id="r1", run_batch_id="batch-1", prompt_id="p1", engine="mock",
+        model="mock-v1", status="success", response_text="x", error=None,
+        latency_ms=1, run_timestamp=batch_started,
+    ))
+
+    conn = sqlite3.connect(db)
+    progress = fetch_run_progress(conn, datetime(2030, 1, 1, 11, 59, 59).isoformat())
+    assert progress is not None
+    assert progress["run_id"] == "batch-1"
+    assert progress["responses"] == 1
+
+
 def test_finished_states_are_marked_done():
     for status in ("completed", "partial_failure", "failed"):
         conn = _conn_with_run(status=status, responses=5, analyzed=5)

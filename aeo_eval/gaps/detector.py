@@ -23,6 +23,31 @@ class GapDetector:
         """Initialize with database connection."""
         self.conn = db_conn
 
+    def _topic_prompt_ids(self, run_id: str, topic: str, missed_only: bool) -> List[str]:
+        """Prompt ids for a topic in this run, from analysed responses.
+
+        With ``missed_only`` the list is restricted to responses where
+        Striim was not mentioned. These ids populate ``affected_prompts``,
+        which the recommendation generator joins back to question text,
+        answers and citations to ground its prompts in evidence.
+        """
+        where_missed = (
+            "AND (ra.striim_mentioned = 0 OR ra.striim_mentioned IS NULL)"
+            if missed_only else ""
+        )
+        rows = self.conn.execute(
+            f"""
+            SELECT DISTINCT rr.prompt_id
+            FROM raw_responses rr
+            JOIN response_analysis ra ON ra.raw_response_id = rr.id
+            JOIN prompts p ON p.id = rr.prompt_id
+            WHERE rr.run_id = ? AND p.topic = ? {where_missed}
+            ORDER BY rr.prompt_id
+            """,
+            (run_id, topic),
+        ).fetchall()
+        return [row[0] for row in rows]
+
     def _topic_priority(self, topic: str) -> str:
         """Highest priority among the topic's prompts; Medium if unknown."""
         row = self.conn.execute(
@@ -76,6 +101,13 @@ class GapDetector:
             ):
                 priority = calculate_gap_priority(striim_rate, top_competitor_rate)
 
+                # Questions Striim lost outright; if it was mentioned in
+                # every answer but still trails the competitor, every
+                # question in the topic is affected.
+                affected = self._topic_prompt_ids(run_id, topic, missed_only=True)
+                if not affected:
+                    affected = self._topic_prompt_ids(run_id, topic, missed_only=False)
+
                 gap = {
                     "id": str(uuid.uuid4()),
                     "topic": topic,
@@ -86,7 +118,7 @@ class GapDetector:
                     "priority": priority,
                     "confidence": "high" if num_responses >= 10 else ("medium" if num_responses >= 5 else "low"),
                     "evidence_ids": [f"metrics-{run_id}-{topic}"],
-                    "affected_prompts": [],  # Would populate from response_analysis join
+                    "affected_prompts": affected,
                     "run_id": run_id,
                     "created_timestamp": datetime.now().isoformat(),
                 }
@@ -130,7 +162,9 @@ class GapDetector:
                     "priority": "high" if competitor_citations > 5 else "medium",
                     "confidence": "high" if competitor_citations > 5 else "medium",
                     "evidence_ids": [f"citations-{run_id}-{topic}"],
-                    "affected_prompts": [],
+                    # The whole topic has zero Striim citations, so every
+                    # answered question in it is affected.
+                    "affected_prompts": self._topic_prompt_ids(run_id, topic, missed_only=False),
                     "run_id": run_id,
                     "created_timestamp": datetime.now().isoformat(),
                 })

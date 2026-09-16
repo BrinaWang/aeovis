@@ -1,4 +1,42 @@
-"""Streamlit dashboard for AEO Visibility Platform."""
+"""Streamlit dashboard for AEO Visibility Platform.
+
+Structure
+---------
+The file is three layers stacked top to bottom:
+
+1. **Data access** (``fetch_*``, ``delete_run``, ``run_module6_standalone``):
+   plain ``sqlite3`` reads against ``config.general.output_db_path``, one
+   connection per call, rows returned as ``sqlite3.Row``. These bypass
+   ``SQLiteStore`` on purpose so the UI can shape queries freely; writes
+   that change workflow state (approve/reject) go through ``SQLiteStore``.
+2. **Renderers** (``render_*_view``): each takes the currently selected
+   ``run`` row and draws one tab or page with Streamlit + Plotly.
+3. **``main``**: page config, the global CSS block, top navigation,
+   the "Configure & Run" panel, background-run progress, the KPI strip
+   and the five analysis tabs.
+
+Session-state keys
+------------------
+``view_mode`` (Dashboard | Cost | Module 6 Checks), ``selected_run_idx``
+(index into ``fetch_all_runs()``), ``show_eval_config`` (panel toggle),
+``eval_job`` (dict with ``thread``, ``started``, ``engine``,
+``num_prompts``, ``result`` for an in-flight pipeline run), and
+per-recommendation toggles ``edit_mode_<id>`` / ``reject_mode_<id>`` /
+``details_mode_<id>``.
+
+Running evaluations from the UI
+-------------------------------
+"Start Evaluation" launches ``run_evaluation`` on a daemon thread and
+stores the job dict in session state. While the thread is alive the page
+polls ``aeo_eval.dashboard.progress.fetch_run_progress`` every 4 seconds
+and reruns itself; the run is found by ``evaluation_runs.timestamp >=
+job["started"]``, so the progress banner reflects DB state, not thread
+state. Streamlit's own ``ScriptRunContext`` warnings from the worker
+thread are harmless because the thread never calls ``st.*``.
+
+Entry point: ``streamlit run streamlit_app.py`` (wrapper that fixes
+``sys.path``) or ``bash scripts/dashboard.sh``.
+"""
 
 import os
 from pathlib import Path
@@ -58,6 +96,13 @@ from aeo_eval.website_accessibility import WebsiteAccessibilityChecker
 def _db_path() -> str:
     """Resolve the DB path at call time so config changes are honored."""
     return str(config.general.output_db_path)
+
+
+# ``evaluation_runs.engine`` value for standalone Module 6 runs started from
+# the dashboard. They evaluate no prompts, so the run selector, comparison
+# and trend views exclude them; the Module 6 view reads website_checks
+# directly and still shows them.
+MODULE6_ENGINE_NAME = "module6"
 
 
 def select_prompts(prompts, topic=None, priority=None, limit=None):
@@ -132,13 +177,14 @@ def get_db_connection():
 
 
 def fetch_all_runs():
-    """Fetch all evaluation runs."""
+    """Fetch all evaluation runs (excluding standalone Module 6 runs)."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM evaluation_runs
+        WHERE engine != ?
         ORDER BY timestamp DESC
-    """)
+    """, (MODULE6_ENGINE_NAME,))
     runs = cursor.fetchall()
     conn.close()
     return runs
@@ -386,9 +432,12 @@ def run_module6_standalone(pages: list, crawlers: list) -> dict:
         # Create a synthetic run ID for this Module 6-only run
         run_id = f"module6-{uuid.uuid4().hex[:12]}"
 
-        # Initialize database
+        # Initialize database and create the parent run row: website_checks
+        # has an enforced FK to evaluation_runs, so without this the insert
+        # below fails with "FOREIGN KEY constraint failed".
         store = SQLiteStore(_db_path())
         store.init_db()
+        store.create_run_record(run_id, engine=MODULE6_ENGINE_NAME, num_prompts=0)
 
         # Create checker and run checks
         checker = WebsiteAccessibilityChecker()

@@ -50,7 +50,7 @@ Displays key metrics from the most recent evaluation run:
 Identifies visibility gaps and actionable recommendations:
 
 **Detected Gaps**:
-- Organized by gap type (Visibility, Citation, Content, Technical, Authority)
+- Organized by gap type (Visibility and Citation are produced today; the filter also lists Content and Technical for future use)
 - Shows Striim visibility vs. top competitor
 - Indicates priority and confidence level
 - Filterable by gap type and priority
@@ -88,9 +88,9 @@ The dashboard pulls real-time data from the SQLite database:
 
 The dashboard reflects the latest evaluation run in the database. To see new data:
 
-1. Run a new evaluation:
+1. Run a new evaluation (from the CLI, or with the dashboard's **Configure & Run** panel):
    ```bash
-   aeo run --engine claude --num-prompts 5
+   python -m aeo_eval.cli run --engine claude --limit 5
    ```
 
 2. Refresh the dashboard (F5 or browser reload)
@@ -118,7 +118,7 @@ Edit `aeo_eval/dashboard/app.py` to:
   ```bash
   sqlite3 data/eval_runs.db "SELECT count(*) FROM evaluation_runs;"
   ```
-- Run a complete evaluation: `aeo run --engine claude`
+- Run a complete evaluation: `python -m aeo_eval.cli run --engine claude`
 
 **Performance issues**
 - Limit the historical trend window in the code

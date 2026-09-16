@@ -1,3 +1,25 @@
+"""Offline engines for tests, demos and dashboard smoke runs.
+
+Two engines live here, both registered in ``aeo_eval.config.PROVIDERS``:
+
+* ``MockEngine`` (``"mock"``): returns a fixed one-line answer, reports
+  zero cost and does **not** implement structured output. A pipeline run
+  on it therefore produces no Module 3 analysis rows (the evaluator's
+  extraction call fails and is swallowed), hence no metrics or gaps. It
+  exists to exercise the run/persist path as cheaply as possible.
+* ``RandomMockEngine`` (``"random-mock"``): draws from a pool of realistic
+  CDC-market answers that mention Striim and competitors with URLs, and
+  implements ``run_with_structured_output`` with deterministic rules so
+  the full pipeline (analysis, metrics, citations, gaps, recommendations)
+  runs end to end with no network access. It also fabricates Module 6/7
+  rows (``generate_test_data_for_run``) so the Website Access and Request
+  Logs dashboard views have data.
+
+Because the evaluator treats both names as ``MOCK_ENGINE_NAMES``, a mock
+engine is also its own Module 3 analyzer; no Claude call is made for
+analysis on mock runs.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -27,6 +49,11 @@ class MockEngine(BaseEngine):
         return 0.0
 
     def run(self, prompt_text: str) -> RunResult:
+        """Return a canned success result echoing the prompt.
+
+        ``prompt_id`` and ``run_batch_id`` are placeholders; the
+        evaluator overwrites both before persisting.
+        """
         return RunResult(
             run_id=f"{self.name}-{uuid.uuid4().hex[:12]}",
             run_batch_id="",

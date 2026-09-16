@@ -15,15 +15,17 @@ The AEO Visibility Platform answers six key questions:
 
 ### Core Capabilities
 
-- **Answer Engine Evaluation** — Run buyer questions against Claude, OpenAI, Grok, and Perplexity with full cost tracking and retry/rate-limit handling
+- **Answer Engine Evaluation** — Run buyer questions against Claude or OpenAI with full cost tracking and retry/rate-limit handling (Gemini, Grok and Perplexity have config sections but no engine implementation yet)
 - **Response Analysis** — Extract brand mentions, positions, claims, sentiment, and citations using LLM-powered structured extraction
-- **Visibility Metrics** — Calculate mention rate, recommendation rate, top-three placement, citation frequency, and competitive share of voice
+- **Visibility Metrics** — Calculate mention rate, recommendation rate, top-three placement, citation frequency, and competitive share of voice, overall and by topic
 - **Citation Intelligence** — Normalize URLs, classify source categories, identify most-cited pages, and detect gaps where competitors are cited but Striim isn't
-- **Website Accessibility Checks** — Verify robots.txt rules, HTTP status, sitemaps, noindex directives, content extractability, and agent-context artifacts (llms.txt)
-- **Request-Log Analysis** — Parse crawler activity logs, detect failures, classify user agents (crawlers vs. delegated agents), and surface access mismatches
-- **Gap Detection** — Identify six types of gaps: visibility, citation, content, technical, third-party authority, and agent-experience gaps
-- **Recommendations** — Generate evidence-backed, rule-based actions (technical/citation gaps) and LLM-drafted recommendations (content gaps) with priority scoring and effort estimates
-- **Dashboard** — Interactive Streamlit dashboard for exploring results, running new evaluations, and tracking historical trends
+- **Website Accessibility Checks** — Verify robots.txt rules per crawler, HTTP status, noindex directives, canonical URLs, and content extractability (sitemap and llms.txt checks are not implemented yet)
+- **Request-Log Analysis** — Library code to parse JSONL crawler logs, classify user agents (crawlers vs. delegated agents), and normalize them for storage; not yet wired into the CLI or pipeline
+- **Gap Detection** — Identify visibility gaps and citation gaps per topic (content, technical, third-party authority, and agent-experience gaps are specified but not implemented)
+- **Recommendations** — For every gap, an LLM-drafted article recommendation plus Reddit/LinkedIn/Facebook social recommendations grounded in the run's evidence, with a template fallback when no LLM is available, priority scoring, effort estimates, and a cost budget
+- **Dashboard** — Interactive Streamlit dashboard for exploring results, running new evaluations, approving recommendations, and tracking historical trends
+
+For the implementation-level view (control flow, formulas, schema, decisions, and known sharp edges) see [architecture.md](architecture.md).
 
 ## Technical Stack
 
@@ -327,26 +329,17 @@ Options:
   --log-level {DEBUG,INFO,WARNING,ERROR}       Logging verbosity
 ```
 
-### View History
+### Report
 
 ```bash
-python -m aeo_eval.cli history [OPTIONS]
+python -m aeo_eval.cli report RUN_ID [--db PATH]
 
-Shows past evaluation runs with summaries.
+Prints a plain-text summary (metrics by topic, gaps, approved recommendations) for one run.
 ```
 
-### Scheduling
+### History and Scheduling
 
-```bash
-python -m aeo_eval.cli schedule [OPTIONS] COMMAND
-
-Commands:
-  add CRON_EXPR        Add a scheduled run (e.g., "0 9 * * MON")
-  list                 Show all scheduled runs
-  delete JOB_ID        Delete a scheduled run
-  pause JOB_ID         Pause a scheduled run
-  resume JOB_ID        Resume a paused run
-```
+`python -m aeo_eval.cli history` and `python -m aeo_eval.cli schedule` are stubs that print "not yet implemented". Past runs are visible in the dashboard's run selector, and `aeo_eval/scheduler.py` contains an APScheduler wrapper that is not yet wired to the CLI.
 
 ## Key Features
 
@@ -363,11 +356,10 @@ Commands:
 - Per-provider configuration
 
 ### 3. Multi-Engine Support
-- Claude (fully implemented)
-- OpenAI (scaffolding ready)
-- Grok (scaffolding ready)
-- Perplexity (scaffolding ready)
-- Mock engine for testing (no API calls)
+- Claude (fully implemented; also the default analyzer for Module 3 and the recommendation engine)
+- OpenAI (fully implemented)
+- Gemini, Grok, Perplexity (config sections and API-key wiring only; no engine class yet)
+- Mock engines for testing (`mock`, `random-mock`; no API calls)
 
 ### 4. Structured Output & Analysis
 - LLM-powered extraction of brands, positions, claims, sentiment
@@ -376,25 +368,23 @@ Commands:
 - Fallback to rule-based when LLM extraction is unavailable
 
 ### 5. Website Accessibility
-- robots.txt rule evaluation for multiple crawlers
-- HTTP status checks and redirect tracking
-- Content extractability scoring
-- Agent-context artifact detection (llms.txt, markdown docs, MCP servers)
-- Extractability comparison vs. cited-page benchmarks
+- robots.txt rule evaluation for multiple crawlers (fail-open when robots.txt is unreachable)
+- HTTP status checks with redirect following, noindex and canonical detection
+- Content extractability scoring (trafilatura word count and text-to-HTML ratio)
+- Optional in the pipeline (`evaluation.run_website_accessibility_checks`) and runnable standalone from the dashboard
+- Not yet implemented: sitemap membership, llms.txt detection, JS-render detection
 
 ### 6. Request-Log Analysis
-- Support for multiple log formats (pluggable parsers)
-- User-agent classification (AI crawlers, delegated agents, browsers, unknown)
-- Failure detection (4xx, 5xx, timeouts)
-- Activity aggregation by crawler and page
+- JSONL log parser with required-field validation and a 90-day window
+- User-agent classification (AI crawlers, delegated agents, search crawlers, browsers, unknown)
+- Edge-action mapping from status codes (allowed, blocked, rate-limited, error)
+- Library only: no CLI flag or pipeline step ingests logs yet; the dashboard's Request Logs view shows rows written by the `random-mock` engine
 
 ### 7. Gap Detection
-- **Visibility gaps** — Striim mentions vs. competitors
-- **Citation gaps** — Competitor pages cited, Striim pages not
-- **Content gaps** — Frequently cited content more complete than Striim's
-- **Technical gaps** — Striim pages blocked, missing from sitemap, noindex, errors
-- **Third-party authority gaps** — External sources mention competitors but not Striim
-- **Agent-experience gaps** — Extractability, gating, or llms.txt issues prevent AI discovery
+- **Visibility gaps** — Striim mention rate below the topic's priority threshold, or a competitor above 2× Striim
+- **Citation gaps** — A topic with three or more competitor citations and none for Striim
+- Each gap records the affected question ids, which the recommendation prompts use as evidence
+- Specified but not implemented: content, technical, third-party authority, and agent-experience gaps
 
 ### 8. Recommendations System
 - **Gap-to-action workflow** — Every detected gap fans out into evidence-backed recommendations
@@ -407,19 +397,13 @@ Commands:
 
 For full technical details on architecture, LLM integration, RAG system, database schema, and known issues, see [docs/recommendations-architecture.md](docs/recommendations-architecture.md).
 
-### 9. Recommendations
-- Rule-based actions for technical and agent-experience gaps
-- LLM-drafted actions for content gaps (human approval required)
-- Evidence-backed justification for every recommendation
-- Priority (1-10) and effort (1-3 point) estimates
-- Auto-approval for high-confidence, high-priority recommendations
-
-### 10. Dashboard
-- Visibility metrics view (mention rate, competitive share, trends)
-- Prompt explorer (browse Q&A, claims, citations, gaps)
-- Citation view (most-cited pages, source categories, content gaps)
-- Website access view (crawler status matrix)
-- Action queue (pending recommendations with status)
+### 9. Dashboard
+- Visibility metrics strip and by-topic breakdown, 30-day visibility and cost trends
+- Gaps & Recommendations, Citation Analysis, Run Comparison, and Trends tabs per run
+- Recommendations Management tab: edit, approve, or reject with a reason
+- Cost Analysis page with daily budget status and editable cost limits
+- Module 6 Checks page for running and reviewing website accessibility checks
+- Configure & Run panel that launches a pipeline run in the background with live progress
 
 ## Data Flow (Modules 2–9)
 
@@ -445,26 +429,23 @@ Module 5: Citation Intelligence
   - Classify sources (Striim-owned, competitor, third-party, etc.)
   - Deduplicate and count citations
            ↓
-Module 6: Website Accessibility (parallel)
-  - Check robots.txt rules
-  - Check HTTP status, redirects, headers
+Module 6: Website Accessibility (optional, config-gated)
+  - Check robots.txt rules per crawler
+  - Check HTTP status, redirects, noindex, canonical
   - Check content extractability
-  - Check llms.txt coverage
-           ↓
-Module 7: Request-Log Analysis (parallel)
-  - Parse logs
-  - Classify crawlers
-  - Detect failures
            ↓
 Module 8: Gap Detection
-  - Combine metrics, citations, website checks
-  - Identify 6 types of gaps
-  - Prioritize and deduplicate
+  - Visibility gaps from by-topic metrics
+  - Citation gaps from run-scoped citation occurrences
+  - Record affected question ids as evidence
            ↓
 Module 9: Recommendations
-  - Generate evidence-backed actions
-  - Auto-approve high-confidence ones
+  - Diagnose each gap and draft an article brief + social plans (Claude), within a cost budget
+  - Template fallback when no LLM is available or the budget is spent
+  - Auto-approve high-confidence, high-priority ones
   - Store for dashboard and reporting
+
+(Module 7, request-log analysis, is library code not yet run by the pipeline.)
            ↓
 Dashboard & Historical Comparison
   - Display findings
@@ -526,16 +507,10 @@ python -m aeo_eval.cli run --engine claude --topic "Oracle CDC"
 python -m aeo_eval.cli run --engine claude --dry-run --limit 50
 ```
 
-### Schedule a Weekly Evaluation
+### Print a Report for a Run
 
 ```bash
-python -m aeo_eval.cli schedule add "0 9 * * MON"
-```
-
-### View Past Evaluations
-
-```bash
-python -m aeo_eval.cli history
+python -m aeo_eval.cli report <run_id>
 ```
 
 ## Troubleshooting

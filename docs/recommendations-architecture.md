@@ -2,6 +2,8 @@
 
 *Reflects code as of 2026-09-14 (branch `main`, working tree).*
 
+> **Update 2026-09-16.** The whole-system reference is now [`architecture.md`](../architecture.md) at the repository root; its §11 supersedes this document where they differ. Three things changed after this document was written: (1) retrieval in §5 is now lexical BM25 over `method_sections`, not embeddings, and works; (2) the generator takes a `cost_budget` and gates every LLM call on it (`architecture.md` §11.4); (3) an evidence builder joins gaps back to questions, answers and cited pages, but is inert until `GapDetector` populates `affected_prompts` (`architecture.md` §11.3). The persistence model, status workflow, schemas and known-issue list below remain accurate.
+
 ## 1. Recommendation Generation
 
 Recommendations are generated from detected gaps. Each gap fans out into **multiple** recommendations: one article recommendation plus up to three platform-specific social media recommendations (Reddit, LinkedIn, Facebook). Two paths exist — LLM-enhanced (when an engine is available and both LLM stages succeed) and template-based (fallback).
@@ -432,15 +434,9 @@ Per LLM call (diagnosis and article generation each do this separately)
 | Similarity | Cosine, computed in Python over all rows |
 | Retrieval | Top-K, K=3 (hardcoded default) |
 
-### ⚠️ Current Behavior: Retrieval Always Falls Back
+### ~~⚠️ Current Behavior: Retrieval Always Falls Back~~ (resolved 2026-09-16)
 
-`MethodsRAG._embed_text` calls `client.messages.embed(...)`. **The Anthropic Messages API has no `embed` method** — Anthropic does not ship a first-party embeddings endpoint. That call raises, is caught, and returns `None`. Consequences:
-
-- `method_sections.embedding` is always `NULL`.
-- `retrieve_relevant_sections` fails to embed the gap context and returns `_get_all_sections()` — **every** stored section, ordered by topic, not the top 3.
-- Both LLM prompts therefore receive the entire methods corpus (~7 KB) rather than a targeted retrieval.
-
-The system is functionally correct (the model gets the methods) but the retrieval is inert, and the full corpus inflates every prompt's input tokens. Fixing this requires a real embeddings provider (Voyage AI is Anthropic's documented recommendation) and a re-run of `initialize_methods`.
+The embedding table above describes the original design. It never worked: `client.messages.embed(...)` is not an Anthropic API, so embeddings were always `NULL` and retrieval returned the whole corpus. `MethodsRAG` now ranks sections with **BM25** (`k1=1.5`, `b=0.75`) computed in Python over the tokenised `method_sections` corpus, returns the top 3 sections that share at least one term with the gap context, and falls back to all sections only when nothing matches. `embedding` stays `NULL` and `embedding_model` is written as `"lexical-bm25"`. `initialize_methods` now `DELETE`s and rebuilds the table on every generator construction instead of upserting. See `architecture.md` §11.5.
 
 ### Fallback Chain
 

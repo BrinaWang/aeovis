@@ -1,3 +1,28 @@
+"""Module 2 + Module 3 runner: execute prompts and persist answers/analysis.
+
+``Evaluator`` owns one evaluation *batch* (``run_batch_id``, which becomes
+``evaluation_runs.run_id``). For each prompt it:
+
+1. reserves an estimated budget slice (``CostTracker.try_reserve_budget``),
+2. calls the answer engine on a worker thread (up to 4 in flight),
+3. persists the ``RunResult`` to ``raw_responses`` **whatever its status**,
+4. on success, runs Module 3 extraction through the *analyzer* engine
+   and persists a ``response_analysis`` row, folding the analyzer's cost
+   into the same ``CostTracker``,
+5. after all futures complete, upserts the batch summary into
+   ``evaluation_runs``.
+
+Two engines are involved: the engine under test (``self.engine``) and the
+analyzer (``self.analyzer_engine``). The analyzer defaults to Claude for
+real engines and to the engine itself for mocks; see ``__init__``.
+
+Cost enforcement is per batch and thread-safe. Because reservations use a
+fixed estimate (``_EST_INPUT_TOKENS``/``_EST_OUTPUT_TOKENS``) and are
+replaced by actual cost only when a result reports ``actual_cost``, a
+failed call keeps its (conservative) reservation. The daily limit is not
+checked here; the orchestrator checks it before constructing an Evaluator.
+"""
+
 from __future__ import annotations
 
 import json
@@ -25,8 +50,20 @@ logger = logging.getLogger(__name__)
 # out to a real provider.
 MOCK_ENGINE_NAMES = frozenset({"mock", "random-mock"})
 
-# Default competitor set used for brand/claim extraction (Module 3).
+# Fallback competitor set for brand/claim extraction (Module 3), used only
+# when config.evaluation.competitors is empty. See competitors_to_track().
 DEFAULT_COMPETITORS = ["Fivetran", "Confluent", "Kafka", "Oracle GoldenGate", "AWS DMS"]
+
+
+def competitors_to_track() -> List[str]:
+    """Competitor names Module 3 should detect.
+
+    Read from ``config.evaluation.competitors`` at call time so edits to
+    the config object (dashboard, tests) take effect without a restart;
+    falls back to DEFAULT_COMPETITORS when the configured list is empty.
+    """
+    configured = list(getattr(app_config.evaluation, "competitors", None) or [])
+    return configured or list(DEFAULT_COMPETITORS)
 
 # Assumed per-prompt token counts behind every pre-run cost estimate and
 # budget reservation.
@@ -345,7 +382,7 @@ class Evaluator:
             analysis = extract_response(
                 response_text=result.response_text,
                 engine=self.analyzer_engine,
-                competitors=DEFAULT_COMPETITORS,
+                competitors=competitors_to_track(),
             )
             result.analysis = analysis
 
@@ -585,12 +622,15 @@ class Evaluator:
         options: RunOptions,
     ) -> Iterable[Prompt]:
         """Filter prompts based on run options."""
+        # Priority is compared case-insensitively: question.json stores
+        # "high"/"medium"/"low" while the CLI offers "High"/"Medium"/"Low".
+        wanted_priority = (options.priority or "").strip().lower()
         for prompt in prompts:
             if options.topic and prompt.topic != options.topic:
                 continue
             if options.persona and prompt.persona != options.persona:
                 continue
-            if options.priority and prompt.priority != options.priority:
+            if wanted_priority and (prompt.priority or "").strip().lower() != wanted_priority:
                 continue
             if not prompt.enabled:
                 continue
