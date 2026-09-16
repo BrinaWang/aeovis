@@ -26,6 +26,7 @@ except (ImportError, Exception):
     # ANTHROPIC_API_KEY might be set in environment already
     pass
 
+import html
 import sqlite3
 import json
 import threading
@@ -43,8 +44,10 @@ from aeo_eval.dashboard.progress import fetch_run_progress, describe_progress
 from aeo_eval.dashboard.formatting import (
     EFFORT_LABELS,
     get_effort_color,
+    get_effort_label,
     get_platform_badge,
     normalize_implementation_step,
+    split_into_paragraphs,
 )
 from aeo_eval.data.prompt_loader import load_prompts
 from aeo_eval.engine.factory import available_engines, create_engine
@@ -753,7 +756,7 @@ def render_gaps_recommendations_view(run):
 
                     # Full problem statement
                     st.markdown("**Problem:**")
-                    st.markdown(rec['problem'])
+                    render_long_text(rec['problem'])
 
                     # Evidence summary
                     if rec['evidence_summary']:
@@ -1182,6 +1185,22 @@ def render_website_access_view(run):
         st.info("No website check data available yet. Run evaluations to see website access information.")
 
 
+def render_long_text(text):
+    """Render a long prose field as readable paragraphs with a comfortable line length."""
+    paragraphs = split_into_paragraphs(text)
+    if not paragraphs:
+        return
+    body = "".join(
+        f"<p style='font-size: 0.95rem; line-height: 1.6; margin: 0;'>{html.escape(p)}</p>"
+        for p in paragraphs
+    )
+    st.markdown(
+        "<div style='display: flex; flex-direction: column; gap: 0.6rem; "
+        f"margin-bottom: 0.75rem;'>{body}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_implementation_steps(steps_json):
     """Render implementation steps from JSON."""
     if not steps_json:
@@ -1198,23 +1217,59 @@ def render_implementation_steps(steps_json):
             st.info("Invalid implementation steps format.")
             return
 
+        rows = []
         for i, raw_step in enumerate(steps, 1):
             # Article recs store dict steps, social media recs store
             # plain strings; normalize both to one shape.
             step = normalize_implementation_step(raw_step, i)
 
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                st.caption(f"**{i}. {step['step']}**")
-                if step['notes']:
-                    st.caption(f"__{step['notes']}__")
-            with col2:
-                if step['effort']:
-                    effort_color = get_effort_color(step['effort'])
-                    st.caption(f"<span style='color: {effort_color}; font-weight: 600;'>**{step['effort']}**</span>", unsafe_allow_html=True)
-            with col3:
-                if step['owner']:
-                    st.caption(f"_{step['owner']}_")
+            badges = []
+            if step['effort']:
+                effort_color = get_effort_color(step['effort'])
+                effort_label = get_effort_label(step['effort'])
+                badges.append(
+                    f"<span style='background: {effort_color}1a; color: {effort_color}; "
+                    "padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; "
+                    f"font-weight: 600;'>{html.escape(effort_label)} effort</span>"
+                )
+            if step['owner']:
+                badges.append(
+                    "<span style='background: #f1f5f9; color: #475569; "
+                    "padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; "
+                    f"font-weight: 500;'>{html.escape(step['owner'])}</span>"
+                )
+
+            notes_html = (
+                "<div style='color: #475569; font-size: 0.85rem; line-height: 1.5; "
+                f"margin-top: 0.25rem;'>{html.escape(step['notes'])}</div>"
+                if step['notes'] else ""
+            )
+            badges_html = (
+                "<div style='display: flex; gap: 0.4rem; flex-wrap: wrap; "
+                f"margin-top: 0.5rem;'>{''.join(badges)}</div>"
+                if badges else ""
+            )
+            rows.append(
+                "<div style='display: flex; gap: 0.75rem; align-items: flex-start; "
+                "padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #e2e8f0; "
+                "border-radius: 10px;'>"
+                "<div style='flex: none; width: 1.6rem; height: 1.6rem; border-radius: 50%; "
+                "background: rgba(30, 64, 175, 0.1); color: #1e40af; font-size: 0.8rem; "
+                "font-weight: 700; display: flex; align-items: center; "
+                f"justify-content: center;'>{i}</div>"
+                "<div style='flex: 1; min-width: 0;'>"
+                "<div style='color: #0f172a; font-size: 0.95rem; font-weight: 600; "
+                f"line-height: 1.45;'>{html.escape(step['step'])}</div>"
+                f"{notes_html}{badges_html}"
+                "</div></div>"
+            )
+
+        st.markdown(
+            "<div style='display: flex; flex-direction: column; gap: 0.5rem;'>"
+            + "".join(rows)
+            + "</div>",
+            unsafe_allow_html=True,
+        )
     except json.JSONDecodeError:
         st.error("Failed to parse implementation steps JSON.")
     except Exception as e:
@@ -1302,7 +1357,8 @@ def render_recommendations_view(run):
             st.divider()
 
             # Problem and Action
-            st.markdown(f"**Problem:** {rec['problem']}")
+            st.markdown("**Problem:**")
+            render_long_text(rec['problem'])
             st.markdown(f"**Recommended Action:** {rec['recommended_action']}")
 
             # Evidence summary
@@ -1873,7 +1929,7 @@ def main():
     """Main Streamlit app."""
     st.set_page_config(
         page_title="AEO Visibility Dashboard",
-        page_icon="🎨",
+        page_icon="",
         layout="wide",
         initial_sidebar_state="collapsed"
     )

@@ -1,6 +1,9 @@
 """Tests for dashboard display formatting helpers."""
 
-from aeo_eval.dashboard.formatting import normalize_implementation_step
+from aeo_eval.dashboard.formatting import (
+    normalize_implementation_step,
+    split_into_paragraphs,
+)
 
 
 def test_dict_step_passes_through():
@@ -37,6 +40,42 @@ def test_unexpected_type_is_stringified():
 def test_dict_without_step_key_gets_positional_name():
     out = normalize_implementation_step({"effort": "Low"}, 4)
     assert out["step"] == "Step 4"
+
+
+def test_split_short_text_stays_one_paragraph():
+    assert split_into_paragraphs("Striim is rarely cited.") == [
+        "Striim is rarely cited."
+    ]
+
+
+def test_split_respects_existing_newlines():
+    text = "First block.\n\nSecond block."
+    assert split_into_paragraphs(text) == ["First block.", "Second block."]
+
+
+def test_split_breaks_long_paragraph_at_sentence_boundaries():
+    """LLM-generated problem statements arrive as one massive paragraph;
+    they must be split into sentence groups, never mid-sentence."""
+    sentences = [f"Sentence number {i} adds more detail about the visibility gap." for i in range(1, 9)]
+    text = " ".join(sentences)
+    paras = split_into_paragraphs(text)
+    assert len(paras) > 1
+    # No sentence is cut: rejoining reproduces the original text.
+    assert " ".join(paras) == text
+    # Each paragraph ends on a sentence boundary.
+    assert all(p.endswith(".") for p in paras)
+
+
+def test_split_does_not_break_on_abbreviation_like_tokens():
+    text = ("Striim scored 0.12 vs Fivetran at 0.85 on comparison prompts. "
+            "The gap persists across engines.")
+    paras = split_into_paragraphs(text)
+    assert " ".join(paras) == text
+
+
+def test_split_handles_empty_and_none():
+    assert split_into_paragraphs("") == []
+    assert split_into_paragraphs(None) == []
 
 
 def test_app_has_single_implementation_steps_renderer():
