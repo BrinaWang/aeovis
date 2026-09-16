@@ -195,8 +195,9 @@ aeo_eval/
 │   └── thresholds.py           # Configurable gap thresholds
 │
 ├── recommendations/             # Module 9: Recommendations & Auto-Approval
-│   ├── generator.py            # Gap-to-action workflow
-│   └── approval.py             # Auto-approval scoring logic
+│   ├── generator.py            # Gap-to-action workflow with LLM & template paths
+│   ├── approval.py             # Auto-approval scoring logic
+│   └── rag.py                  # RAG system for methods context retrieval
 │
 ├── runner/
 │   └── evaluator.py            # Evaluator: runs prompts, tracks cost
@@ -395,14 +396,25 @@ Commands:
 - **Third-party authority gaps** — External sources mention competitors but not Striim
 - **Agent-experience gaps** — Extractability, gating, or llms.txt issues prevent AI discovery
 
-### 8. Recommendations
+### 8. Recommendations System
+- **Gap-to-action workflow** — Every detected gap fans out into evidence-backed recommendations
+- **Two generation paths** — LLM-enhanced (Claude diagnosis + article + multi-platform social recs) and template fallback for when LLM is unavailable
+- **Priority & confidence scoring** — Recommendations inherit gap-level confidence; priority ranges 1–10 based on gap severity and Striim visibility
+- **Auto-approval logic** — High-confidence, high-priority recommendations (priority ≥8) auto-advance from draft to approved
+- **Full audit trail** — All recommendations track approval status, reviewer, timestamp, and implementation steps
+- **Platform-specific outputs** — Social media recommendations (Reddit, LinkedIn, Facebook) with engagement strategies; article recommendations with structured implementation steps
+- **LLM cost tracking** — Every structured output call (diagnosis, article generation, social generation) tracked and folded into run totals
+
+For full technical details on architecture, LLM integration, RAG system, database schema, and known issues, see [docs/recommendations-architecture.md](docs/recommendations-architecture.md).
+
+### 9. Recommendations
 - Rule-based actions for technical and agent-experience gaps
 - LLM-drafted actions for content gaps (human approval required)
 - Evidence-backed justification for every recommendation
 - Priority (1-10) and effort (1-3 point) estimates
 - Auto-approval for high-confidence, high-priority recommendations
 
-### 9. Dashboard
+### 10. Dashboard
 - Visibility metrics view (mention rate, competitive share, trends)
 - Prompt explorer (browse Q&A, claims, citations, gaps)
 - Citation view (most-cited pages, source categories, content gaps)
